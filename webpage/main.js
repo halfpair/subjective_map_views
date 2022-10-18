@@ -164,13 +164,12 @@ function Projector1 ()
 
 function Projector2 ()
 {
-  this._side_ratio = 1.0;
   this._scale = 1.0;
   this._offset = {x: 0, y: 0};
   this._width = 64;
   this._height = 64;
   this._getScale = function () {
-    if (this._width / this._height > this._side_ratio)
+    if (this._width > this._height)
     {
       return this._height;
     }
@@ -198,8 +197,9 @@ function Projector2 ()
             y: this._scale / 2.0 * (1.0 + Math.sin (-pt_ab.b)) + this._offset.y};
   }
   this.backProjectPoint = function (pt_xy) {
-    return {a: (pt_xy.x - this._offset.x) / this._scale - Math.PI,
-            b: Math.PI / 2.0 - (pt_xy.y - this._offset.y) / this._scale};
+    let b = -Math.asin (2.0 * (pt_xy.y - this._offset.y) / this._scale - 1.0);
+    return {a: Math.asin ((2.0 * (pt_xy.x - this._offset.x) / this._scale - 1.0) / Math.cos (b)),
+            b: b};
   }
   this.drawPassepartout = function (context) {
     context.fillStyle = '#888888';
@@ -225,9 +225,13 @@ function MouseTracker ()
   this.up_pos = {x: 0, y: 0};
   this.rot_mat = I;
   this.catchDown = function (event) {
-    this.down = true;
-    this.down_pos = projector.backProjectPoint ({x: event.layerX, y: event.layerY});
-    this.rot_mat = transformator.rot_mat;
+    let cur_pos = projector.backProjectPoint ({x: event.layerX, y: event.layerY});
+    if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
+    {
+      this.down = true;
+      this.down_pos = cur_pos;
+      this.rot_mat = transformator.rot_mat;
+    }
   }
   this.catchMove = function (event) {
     if (this.down)
@@ -235,8 +239,11 @@ function MouseTracker ()
       let cur_pos = projector.backProjectPoint ({x: event.layerX, y: event.layerY});
       event.cancelBubble = true;
       event.returnValue = false;
-      transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
-      drawPolygons ();
+      if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
+      {
+        transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+        drawPolygons ();
+      }
     }
   }
   this.catchWheel = function (event) {
