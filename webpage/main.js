@@ -113,7 +113,7 @@ function Transformator ()
 
 var transformator = new Transformator ();
 
-function Projector1 ()
+function UnwindLatitudeProjector ()
 {
   this._side_ratio = 2.0;
   this._scale = 1.0;
@@ -127,7 +127,7 @@ function Projector1 ()
     }
     else
     {
-      return this._width / 2.0 / Math.PI;
+      return this._width / this._side_ratio / Math.PI;
     }
   }
   this._getOffset = function () {
@@ -162,7 +162,7 @@ function Projector1 ()
   }
 }
 
-function Projector2 ()
+function OrthographicProjector ()
 {
   this._scale = 1.0;
   this._offset = {x: 0, y: 0};
@@ -211,12 +211,63 @@ function Projector2 ()
   }
   this.suppressLine = function (from, to) {
     let lim = Math.PI / 2.0;
-    return to.a < -lim || to.a > lim || to.b < -lim || to.b > lim || from.a < -lim || from.a > lim || from.b < -lim || from.b > lim;
+    return Math.abs (to.a) > lim || Math.abs (to.b) > lim || Math.abs (from.a) > lim || Math.abs (from.b) > lim;
   }
 }
 
-var projector = new Projector1 ();
+function MercatorProjector ()
+{
+  this._side_ratio = 1.28952191; // +/-80deg latitude
+  this._scale = 1.0; // along x-axis (equator)
+  this._offset = {x: 0, y: 0};
+  this._width = 128;
+  this._height = 64;
+  this._getScale = function () {
+    if (this._width / this._height > this._side_ratio)
+    {
+      return this._height * this._side_ratio / 2.0 / Math.PI;
+    }
+    else
+    {
+      return this._width / 2.0 / Math.PI;
+    }
+  }
+  this._getOffset = function () {
+    return {x: this._width / 2.0 - this._scale * Math.PI,
+            y: this._height / 2.0 - this._scale * Math.PI / this._side_ratio};
+  }
+  this.setWidth = function (width) {
+    this._width = width;
+    this._scale = this._getScale ();
+    this._offset = this._getOffset ();
+  }
+  this.setHeight = function (height) {
+    this._height = height;
+    this._scale = this._getScale ();
+    this._offset = this._getOffset ();
+  }
+  this.projectPoint = function (pt_ab) {
+    return {x: this._scale * (pt_ab.a + Math.PI) + this._offset.x,
+            y: this._scale * (2.4362461 - Math.atanh (Math.sin (pt_ab.b))) + this._offset.y};
+  }
+  this.backProjectPoint = function (pt_xy) {
+    return {a: (pt_xy.x - this._offset.x) / this._scale - Math.PI,
+            b: Math.asin (Math.tanh (2.4362461 - (pt_xy.y - this._offset.y) / this._scale))};
+  }
+  this.drawPassepartout = function (context) {
+    context.fillStyle = '#888888';
+    context.fillRect (0, 0, this._width, this._height);
+    context.clearRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
+  }
+  this.suppressLine = function (from, to) {
+    let lim = 80.0 / 180.0 * Math.PI;
+    return Math.abs (to.b) > lim || Math.abs (from.b) > lim || Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
+  }
+}
+
+const projectors = [new UnwindLatitudeProjector (), new OrthographicProjector (), new MercatorProjector];
 var projector_counter = 0;
+var projector = projectors[projector_counter];
 
 function MouseTracker ()
 {
@@ -262,14 +313,7 @@ function MouseTracker ()
   }
   this.catchDblClick = function (event) {
     projector_counter += 1;
-    if (projector_counter % 2 > 0)
-    {
-      projector = new Projector2 ();
-    }
-    else
-    {
-      projector = new Projector1 ();
-    }
+    projector = projectors[projector_counter % projectors.length];
     drawPolygons ();
   }
 }
