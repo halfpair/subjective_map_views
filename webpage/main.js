@@ -217,7 +217,8 @@ function OrthographicProjector ()
 
 function MercatorProjector ()
 {
-  this._side_ratio = 1.28952191; // +/-80deg latitude
+  this._lat_limit = 80.0 / 180.0 * Math.PI;
+  this._side_ratio = Math.PI / Math.atanh (Math.sin (this._lat_limit));
   this._scale = 1.0; // along x-axis (equator)
   this._offset = {x: 0, y: 0};
   this._width = 128;
@@ -260,8 +261,7 @@ function MercatorProjector ()
     context.clearRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
   }
   this.suppressLine = function (from, to) {
-    let lim = 80.0 / 180.0 * Math.PI;
-    return Math.abs (to.b) > lim || Math.abs (from.b) > lim || Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
+    return Math.abs (to.b) > this._lat_limit || Math.abs (from.b) > this._lat_limit || Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
   }
 }
 
