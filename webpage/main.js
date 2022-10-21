@@ -11,6 +11,23 @@ function xyz2ab (pt_xyz)
           b: Math.asin (pt_xyz.y)};
 }
 
+function loadJsonData (src_url, converter, data)
+{
+  let request = new XMLHttpRequest ();
+  request.overrideMimeType ("application/json");
+  request.open ("GET", src_url, true);
+  request.onreadystatechange = function () {
+    if (request.readyState == 4 && request.status == "200")
+    {
+      json_data = JSON.parse (request.responseText);
+      converter (json_data, data);
+    }
+    data.loaded = true;
+    resize_handler.catchResize (null);
+  };
+  request.send (null);
+}
+
 function MapData ()
 {
   this.loaded = false;
@@ -19,29 +36,35 @@ function MapData ()
 
 var map_data = new MapData ();
 
-function loadMapData (src_url, map_data)
+function json2MapData (json_data, data)
 {
-  let request = new XMLHttpRequest();
-  request.overrideMimeType ("application/json");
-  request.open ("GET", src_url, true);
-  request.onreadystatechange = function () {
-    if (request.readyState == 4 && request.status == "200")
+  for (const data_set of json_data)
+  {
+    let point_set = [];
+    for (const element of data_set)
     {
-      json_data = JSON.parse (request.responseText);
-      for (const data_set of json_data)
-      {
-        let point_set = [];
-        for (const element of data_set)
-        {
-          point_set.push (ab2xyz ({a: element[0] * Math.PI / 180.0, b: element[1] * Math.PI / 180.0}));
-        }
-        map_data.polygons.push (point_set);
-      }
-      map_data.loaded = true;
-      resize_handler.catchResize (null);
+      point_set.push (ab2xyz ({a: element[0] * Math.PI / 180.0, b: element[1] * Math.PI / 180.0}));
     }
-  };
-  request.send (null);
+    data.polygons.push (point_set);
+  }
+}
+
+function CityData ()
+{
+  this.loaded = false;
+  this.data = {};
+}
+
+var city_data = new CityData ();
+
+function json2CityData (json_data, data)
+{
+  for (const [key, value] of Object.entries (json_data))
+  {
+    data.data[key] = ab2xyz ({a: value[0] * Math.PI / 180.0, b: value[1] * Math.PI / 180.0});
+  }
+  console.log (data.data["Berlin"]);
+  console.log (data.data["Canberra"]);
 }
 
 const I = [[1.0, 0.0, 0.0],
@@ -435,7 +458,8 @@ function drawPolygons ()
 
 window.onload = function ()
 {
-  loadMapData ("./ne_110m_countries_red.json", map_data);
+  loadJsonData ("./ne_110m_countries_red.json", json2MapData, map_data);
+  loadJsonData ("./cities_red.json", json2CityData, city_data);
   let frame = document.getElementById ("frame");
   frame.onmousedown = mouse_tracker.catchDown;
   frame.onmouseup = mouse_tracker.catchUp;
