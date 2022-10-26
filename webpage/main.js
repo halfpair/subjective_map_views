@@ -34,7 +34,8 @@ function MapData ()
   this.polygons = [];
 }
 
-var map_data = new MapData ();
+var map_data1 = new MapData ();
+var map_data2 = new MapData ();
 
 function json2MapData (json_data, data)
 {
@@ -47,6 +48,8 @@ function json2MapData (json_data, data)
     }
     data.polygons.push (point_set);
   }
+  map_data2 = data;
+  map_data2.loaded = true;
 }
 
 function CityData ()
@@ -157,7 +160,8 @@ function Transformator ()
   }
 }
 
-var transformator = new Transformator ();
+var transformator1 = new Transformator ();
+var transformator2 = new Transformator ();
 
 function EquirectangularProjector ()
 {
@@ -379,7 +383,15 @@ function MouseTracker ()
     {
       this.down = true;
       this.down_pos = cur_pos;
-      this.rot_mat = transformator.rot_mat;
+      switch (event.button)
+      {
+        case 0:
+          this.rot_mat = transformator1.rot_mat;
+          break;
+        case 1:
+          this.rot_mat = transformator2.rot_mat;
+          break;
+      }
     }
   }
   this.catchMove = function (event) {
@@ -390,7 +402,16 @@ function MouseTracker ()
       event.returnValue = false;
       if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
       {
-        transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+        switch (event.button)
+        {
+          case 0:
+            transformator1.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+            transformator2.rot_mat = matMulMat (transformator2.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+            break;
+          case 1:
+            transformator2.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+            break;
+          }
         drawPolygons ();
       }
     }
@@ -399,16 +420,27 @@ function MouseTracker ()
     event.cancelBubble = true;
     event.returnValue = false;
     const a = event.deltaY > 0 ? 1.0 : -1.0;
-    transformator.rot_mat = matMulMat (transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
-    transformator.transformMapData (map_data);
-    transformator.transformMapData (city_data);
-    transformator.rot_mat = I;
+    if (a > 0)
+    {
+      transformator1.rot_mat = matMulMat (transformator1.rot_mat, getRotMatZ (a * Math.PI / 20.0));
+    }
+    else
+    {
+      transformator2.rot_mat = matMulMat (transformator2.rot_mat, getRotMatZ (a * Math.PI / 20.0));
+    }
+    transformator1.transformMapData (map_data1);
+    transformator2.transformMapData (map_data2);
+    transformator1.transformMapData (city_data);
+    transformator1.rot_mat = I;
+    transformator2.rot_mat = I;
     drawPolygons ();
   }
   this.catchUp = function (event) {
-    transformator.transformMapData (map_data);
-    transformator.transformMapData (city_data);
-    transformator.rot_mat = I;
+    transformator1.transformMapData (map_data1);
+    transformator2.transformMapData (map_data2);
+    transformator1.transformMapData (city_data);
+    transformator1.rot_mat = I;
+    transformator2.rot_mat = I;
     this.down = false;
   }
   this.catchDblClick = function (event) {
@@ -439,7 +471,7 @@ function ResizeHandler ()
 
 var resize_handler = new ResizeHandler ();
 
-function drawPolygon (context, polygon)
+function drawPolygon (context, polygon, transformator)
 {
   let start_point = {a: Number.MAX_VALUE, b: Number.MAX_VALUE};
   for (const pt_xyz of polygon)
@@ -460,7 +492,7 @@ function drawPolygon (context, polygon)
 
 function drawPolygons ()
 {
-  if (map_data.loaded && city_data.loaded)
+  if (map_data1.loaded && map_data2.loaded && city_data.loaded)
   {
     let frame = document.getElementById ("frame");
     let map = document.getElementById ("map");
@@ -470,19 +502,26 @@ function drawPolygons ()
     projector.setHeight (map.height);
     let context = map.getContext ("2d");
     projector.drawPassepartout (context);
-    context.strokeStyle = "black";
     context.lineWidth = 1;
+    context.strokeStyle = "green";
     context.beginPath ();
-    for (const polygon of map_data.polygons)
+    for (const polygon of map_data2.polygons)
     {
-      drawPolygon (context, polygon);
+      drawPolygon (context, polygon, transformator2);
+    }
+    context.stroke ();
+    context.strokeStyle = "black";
+    context.beginPath ();
+    for (const polygon of map_data1.polygons)
+    {
+      drawPolygon (context, polygon, transformator1);
     }
     context.stroke ();
     context.strokeStyle = "red";
     context.beginPath ();
     for (const polygon of city_data.polygons)
     {
-      drawPolygon (context, polygon);
+      drawPolygon (context, polygon, transformator1);
     }
     context.stroke ();
   }
@@ -490,7 +529,7 @@ function drawPolygons ()
 
 window.onload = function ()
 {
-  loadJsonData ("./ne_110m_countries_red.json", json2MapData, map_data);
+  loadJsonData ("./ne_110m_countries_red.json", json2MapData, map_data1);
   loadJsonData ("./cities_red.json", json2CityData, city_data);
   let frame = document.getElementById ("frame");
   frame.onmousedown = mouse_tracker.catchDown;
