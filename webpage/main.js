@@ -53,6 +53,7 @@ function CityData ()
 {
   this.loaded = false;
   this.data = {};
+  this.polygons = [];
 }
 
 var city_data = new CityData ();
@@ -63,8 +64,30 @@ function json2CityData (json_data, data)
   {
     data.data[key] = ab2xyz ({a: value[0] * Math.PI / 180.0, b: value[1] * Math.PI / 180.0});
   }
-  console.log (data.data["Berlin"]);
-  console.log (data.data["Canberra"]);
+  let pt_B = data.data["Berlin"];
+  let pt_C = data.data["Canberra"];
+  let dot = ptDotPt (pt_B, pt_C);
+  let phi = Math.acos (dot);
+  let sphi = Math.sin (phi);
+  let pt_h = {x: (pt_C.x - pt_B.x * dot) / sphi,
+              y: (pt_C.y - pt_B.y * dot) / sphi,
+              z: (pt_C.z - pt_B.z * dot) / sphi};
+  let step_width = Math.PI / 180.0 / 60; // minutes -> 1 seamile
+  let point_set = [];
+  for (let beta = 0.0; beta <= phi; beta += step_width)
+  {
+    let cbeta = Math.cos (beta);
+    let sbeta = Math.sin (beta);
+    point_set.push ({x: pt_B.x * cbeta + pt_h.x * sbeta,
+                    y: pt_B.y * cbeta + pt_h.y * sbeta,
+                    z: pt_B.z * cbeta + pt_h.z * sbeta});
+  }
+  data.polygons.push (point_set);
+}
+
+function ptDotPt (pt_xyz_1, pt_xyz_2)
+{
+  return pt_xyz_1.x * pt_xyz_2.x + pt_xyz_1.y * pt_xyz_2.y + pt_xyz_1.z * pt_xyz_2.z;
 }
 
 const I = [[1.0, 0.0, 0.0],
@@ -136,7 +159,7 @@ function Transformator ()
 
 var transformator = new Transformator ();
 
-function UnwindLatitudeProjector ()
+function EquirectangularProjector ()
 {
   this._side_ratio = 2.0;
   this._scale = 1.0;
@@ -340,7 +363,7 @@ function CylindricProjector ()
   }
 }
 
-const projectors = [new UnwindLatitudeProjector (), new OrthographicProjector (), new MercatorProjector, new CylindricProjector];
+const projectors = [new EquirectangularProjector (), new OrthographicProjector (), new MercatorProjector, new CylindricProjector];
 var projector_counter = 0;
 var projector = projectors[projector_counter];
 
@@ -378,11 +401,13 @@ function MouseTracker ()
     const a = event.deltaY > 0 ? 1.0 : -1.0;
     transformator.rot_mat = matMulMat (transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
     transformator.transformMapData (map_data);
+    transformator.transformMapData (city_data);
     transformator.rot_mat = I;
     drawPolygons ();
   }
   this.catchUp = function (event) {
     transformator.transformMapData (map_data);
+    transformator.transformMapData (city_data);
     transformator.rot_mat = I;
     this.down = false;
   }
@@ -435,7 +460,7 @@ function drawPolygon (context, polygon)
 
 function drawPolygons ()
 {
-  if (map_data.loaded)
+  if (map_data.loaded && city_data.loaded)
   {
     let frame = document.getElementById ("frame");
     let map = document.getElementById ("map");
@@ -449,6 +474,13 @@ function drawPolygons ()
     context.lineWidth = 1;
     context.beginPath ();
     for (const polygon of map_data.polygons)
+    {
+      drawPolygon (context, polygon);
+    }
+    context.stroke ();
+    context.strokeStyle = "red";
+    context.beginPath ();
+    for (const polygon of city_data.polygons)
     {
       drawPolygon (context, polygon);
     }
