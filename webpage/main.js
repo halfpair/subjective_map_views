@@ -426,6 +426,7 @@ function MouseTracker ()
     if (a > 0)
     {
       map_data1.transformator.rot_mat = matMulMat (map_data1.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
+      map_data2.transformator.rot_mat = matMulMat (map_data2.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
     }
     else
     {
