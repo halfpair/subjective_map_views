@@ -28,15 +28,6 @@ function loadJsonData (src_url, converter, data)
   request.send (null);
 }
 
-function MapData ()
-{
-  this.loaded = false;
-  this.polygons = [];
-}
-
-var map_data1 = new MapData ();
-var map_data2 = new MapData ();
-
 function json2MapData (json_data, data)
 {
   for (const data_set of json_data)
@@ -48,7 +39,7 @@ function json2MapData (json_data, data)
     }
     data.polygons.push (point_set);
   }
-  map_data2 = data;
+  map_data2.polygons = structuredClone (data.polygons);
   map_data2.loaded = true;
 }
 
@@ -160,8 +151,18 @@ function Transformator ()
   }
 }
 
-var transformator1 = new Transformator ();
-var transformator2 = new Transformator ();
+class MapData
+{
+  constructor ()
+  {
+    this.loaded = false;
+    this.polygons = [];
+    this.transformator = new Transformator ();
+  }
+}
+
+var map_data1 = new MapData ();
+var map_data2 = new MapData ();
 
 function EquirectangularProjector ()
 {
@@ -374,6 +375,7 @@ var projector = projectors[projector_counter];
 function MouseTracker ()
 {
   this.down = false;
+  this.button = null;
   this.down_pos = {x: 0, y: 0};
   this.up_pos = {x: 0, y: 0};
   this.rot_mat = I;
@@ -382,14 +384,15 @@ function MouseTracker ()
     if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
     {
       this.down = true;
+      this.button = event.button; // store it here as onmousemove may not provide it
       this.down_pos = cur_pos;
-      switch (event.button)
+      switch (this.button)
       {
-        case 0:
-          this.rot_mat = transformator1.rot_mat;
+        case 0: // left mouse button
+          this.rot_mat = map_data1.transformator.rot_mat;
           break;
-        case 1:
-          this.rot_mat = transformator2.rot_mat;
+        case 1: // middle mouse button
+          this.rot_mat = map_data2.transformator.rot_mat;
           break;
       }
     }
@@ -402,16 +405,16 @@ function MouseTracker ()
       event.returnValue = false;
       if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
       {
-        switch (event.button)
+        switch (this.button)
         {
           case 0:
-            transformator1.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
-            transformator2.rot_mat = matMulMat (transformator2.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+            map_data1.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+            map_data2.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
             break;
           case 1:
-            transformator2.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+            map_data2.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
             break;
-          }
+        }
         drawPolygons ();
       }
     }
@@ -422,26 +425,27 @@ function MouseTracker ()
     const a = event.deltaY > 0 ? 1.0 : -1.0;
     if (a > 0)
     {
-      transformator1.rot_mat = matMulMat (transformator1.rot_mat, getRotMatZ (a * Math.PI / 20.0));
+      map_data1.transformator.rot_mat = matMulMat (map_data1.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
     }
     else
     {
-      transformator2.rot_mat = matMulMat (transformator2.rot_mat, getRotMatZ (a * Math.PI / 20.0));
+      map_data2.transformator.rot_mat = matMulMat (map_data2.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
     }
-    transformator1.transformMapData (map_data1);
-    transformator2.transformMapData (map_data2);
-    transformator1.transformMapData (city_data);
-    transformator1.rot_mat = I;
-    transformator2.rot_mat = I;
+    map_data1.transformator.transformMapData (map_data1);
+    map_data2.transformator.transformMapData (map_data2);
+    map_data1.transformator.transformMapData (city_data);
+    map_data1.transformator.rot_mat = I;
+    map_data2.transformator.rot_mat = I;
     drawPolygons ();
   }
   this.catchUp = function (event) {
-    transformator1.transformMapData (map_data1);
-    transformator2.transformMapData (map_data2);
-    transformator1.transformMapData (city_data);
-    transformator1.rot_mat = I;
-    transformator2.rot_mat = I;
+    map_data1.transformator.transformMapData (map_data1);
+    map_data2.transformator.transformMapData (map_data2);
+    map_data1.transformator.transformMapData (city_data);
+    map_data1.transformator.rot_mat = I;
+    map_data2.transformator.rot_mat = I;
     this.down = false;
+    this.button = null;
   }
   this.catchDblClick = function (event) {
     projector_counter += 1;
@@ -507,21 +511,21 @@ function drawPolygons ()
     context.beginPath ();
     for (const polygon of map_data2.polygons)
     {
-      drawPolygon (context, polygon, transformator2);
+      drawPolygon (context, polygon, map_data2.transformator);
     }
     context.stroke ();
     context.strokeStyle = "black";
     context.beginPath ();
     for (const polygon of map_data1.polygons)
     {
-      drawPolygon (context, polygon, transformator1);
+      drawPolygon (context, polygon, map_data1.transformator);
     }
     context.stroke ();
     context.strokeStyle = "red";
     context.beginPath ();
     for (const polygon of city_data.polygons)
     {
-      drawPolygon (context, polygon, transformator1);
+      drawPolygon (context, polygon, map_data1.transformator);
     }
     context.stroke ();
   }
