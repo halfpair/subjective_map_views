@@ -204,9 +204,10 @@ function EquirectangularProjector ()
             b: Math.PI / 2.0 - (pt_xy.y - this._offset.y) / this._scale};
   }
   this.drawPassepartout = function (context) {
-    context.fillStyle = '#888888';
+    context.fillStyle = '#101010';
     context.fillRect (0, 0, this._width, this._height);
-    context.clearRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
+    context.fillStyle = '#8888FF'
+    context.fillRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
   }
   this.suppressLine = function (from, to) {
     return Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
@@ -253,9 +254,9 @@ function OrthographicProjector ()
             b: b};
   }
   this.drawPassepartout = function (context) {
-    context.fillStyle = '#888888';
+    context.fillStyle = '#101010';
     context.fillRect (0, 0, this._width, this._height);
-    context.fillStyle = '#FFFFFF';
+    context.fillStyle = '#8888FF';
     context.beginPath ();
     context.arc (this._width / 2.0, this._height / 2.0, this._scale / 2.0, 0, Math.PI * 2.0, true);
     context.fill ();
@@ -308,9 +309,10 @@ function MercatorProjector ()
             b: Math.asin (Math.tanh (this._lat_prj_limit - (pt_xy.y - this._offset.y) / this._scale))};
   }
   this.drawPassepartout = function (context) {
-    context.fillStyle = '#888888';
+    context.fillStyle = '#101010';
     context.fillRect (0, 0, this._width, this._height);
-    context.clearRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
+    context.fillStyle = '#8888FF';
+    context.fillRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
   }
   this.suppressLine = function (from, to) {
     return Math.abs (to.b) > this._lat_limit || Math.abs (from.b) > this._lat_limit || Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
@@ -359,9 +361,10 @@ function CylindricProjector ()
             b: Math.atan (this._lat_prj_limit - (pt_xy.y - this._offset.y) / this._scale)};
   }
   this.drawPassepartout = function (context) {
-    context.fillStyle = '#888888';
+    context.fillStyle = '#101010';
     context.fillRect (0, 0, this._width, this._height);
-    context.clearRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
+    context.fillStyle = '#8888FF';
+    context.fillRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
   }
   this.suppressLine = function (from, to) {
     return Math.abs (to.b) > this._lat_limit || Math.abs (from.b) > this._lat_limit || Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
@@ -508,19 +511,23 @@ function drawPolygons ()
     let context = map.getContext ("2d");
     projector.drawPassepartout (context);
     context.lineWidth = 1;
-    context.strokeStyle = "green";
+    context.strokeStyle = "#CCCCCC";
+    context.fillStyle = "rgba(0,128,0,0.5)";
     context.beginPath ();
     for (const polygon of map_data2.polygons)
     {
       drawPolygon (context, polygon, map_data2.transformator);
     }
+    context.fill ();
     context.stroke ();
-    context.strokeStyle = "black";
+    context.strokeStyle = "#CCCCCC";
+    context.fillStyle = "rgba(128,0,0,0.5)";
     context.beginPath ();
     for (const polygon of map_data1.polygons)
     {
       drawPolygon (context, polygon, map_data1.transformator);
     }
+    context.fill ();
     context.stroke ();
     context.strokeStyle = "red";
     context.beginPath ();
