@@ -164,52 +164,78 @@ class MapData
 var map_data1 = new MapData ();
 var map_data2 = new MapData ();
 
-function EquirectangularProjector ()
+class BaseProjector
 {
-  this._side_ratio = 2.0;
-  this._scale = 1.0;
-  this._offset = {x: 0, y: 0};
-  this._width = 128;
-  this._height = 64;
-  this._getScale = function () {
-    if (this._width / this._height > this._side_ratio)
-    {
-      return this._height / Math.PI;
-    }
-    else
-    {
-      return this._width / this._side_ratio / Math.PI;
-    }
+  side_ratio = 1.0;
+  draw_width = 128;
+  offset = {x: 0, y: 0};
+  width = 128;
+  height = 64;
+
+  constructor () {}
+
+  setSize (width, height)
+  {
+    this.width = width;
+    this.height = height;
+
+    this.draw_width = width > height * this.side_ratio ? height * this.side_ratio : width;
+
+    this.offset = {x: (width - this.draw_width) / 2.0,
+                   y: (height - this.draw_width / this.side_ratio) / 2.0};
   }
-  this._getOffset = function () {
-    return {x: this._width / 2.0 - this._scale * Math.PI,
-            y: (this._height - this._scale * Math.PI) / 2.0};
+
+  projectPoint (pt_ab)
+  {
+    return {x: this.draw_width * (pt_ab.a / Math.PI + 1.0) / 2.0 + this.offset.x,
+            y: this.draw_width / this.side_ratio * (0.5 - pt_ab.b / Math.PI) + this.offset.y};
   }
-  this.setWidth = function (width) {
-    this._width = width;
-    this._scale = this._getScale ();
-    this._offset = this._getOffset ();
+
+  backProjectPoint (pt_xy)
+  {
+    return {a: ((pt_xy.x - this.offset.x) * 2.0 / this.draw_width - 1.0) * Math.PI,
+            b: (0.5 - (pt_xy.y - this.offset.y) * this.side_ratio / this.draw_width) * Math.PI};
   }
-  this.setHeight = function (height) {
-    this._height = height;
-    this._scale = this._getScale ();
-    this._offset = this._getOffset ();
-  }
-  this.projectPoint = function (pt_ab) {
-    return {x: this._scale * (pt_ab.a + Math.PI) + this._offset.x,
-            y: this._scale * (Math.PI / 2.0 - pt_ab.b) + this._offset.y};
-  }
-  this.backProjectPoint = function (pt_xy) {
-    return {a: (pt_xy.x - this._offset.x) / this._scale - Math.PI,
-            b: Math.PI / 2.0 - (pt_xy.y - this._offset.y) / this._scale};
-  }
-  this.drawPassepartout = function (context) {
+
+  drawPassepartout (context)
+  {
     context.fillStyle = '#101010';
-    context.fillRect (0, 0, this._width, this._height);
+    context.fillRect (0, 0, this.width, this.height);
     context.fillStyle = '#8888FF'
-    context.fillRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
+    context.fillRect (this.offset.x, this.offset.y, this.draw_width, this.draw_width / this.side_ratio);
   }
-  this.suppressLine = function (from, to) {
+
+  suppressLine (from, to)
+  {
+    return false;
+  }
+}
+
+class EquirectangularProjector extends BaseProjector
+{
+  constructor ()
+  {
+    super ();
+    this.side_ratio = 2.0;
+  }
+
+  projectPoint (pt_ab)
+  {
+    return super.projectPoint (pt_ab);
+  }
+
+  backProjectPoint (pt_xy)
+  {
+    return super.backProjectPoint (pt_xy);
+  }
+
+  drawPassepartout (context)
+  {
+    super.drawPassepartout (context);
+  }
+
+  suppressLine (from, to)
+  {
     return Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
   }
 }
@@ -371,7 +397,7 @@ function CylindricProjector ()
   }
 }
 
-const projectors = [new EquirectangularProjector (), new OrthographicProjector (), new MercatorProjector, new CylindricProjector];
+const projectors = [new EquirectangularProjector ()];//, new OrthographicProjector (), new MercatorProjector, new CylindricProjector];
 var projector_counter = 0;
 var projector = projectors[projector_counter];
 
@@ -506,8 +532,7 @@ function drawPolygons ()
     let map = document.getElementById ("map");
     map.width = frame.clientWidth;
     map.height = frame.clientHeight;
-    projector.setWidth (map.width);
-    projector.setHeight (map.height);
+    projector.setSize (map.width, map.height);
     let context = map.getContext ("2d");
     projector.drawPassepartout (context);
     context.lineWidth = 1;
