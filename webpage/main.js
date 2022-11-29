@@ -233,11 +233,6 @@ class EquirectangularProjector extends BaseProjector
     return super.backProjectPoint (pt_xy);
   }
 
-  drawPassepartout (context)
-  {
-    super.drawPassepartout (context);
-  }
-
   suppressLine (from, to)
   {
     return Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
@@ -283,55 +278,32 @@ class OrthographicProjector extends BaseProjector
   }
 }
 
-function MercatorProjector ()
+class MercatorProjector extends BaseProjector
 {
-  this._lat_limit = 80.0 / 180.0 * Math.PI;
-  this._lat_prj_limit = Math.atanh (Math.sin (this._lat_limit));
-  this._side_ratio = Math.PI / this._lat_prj_limit;
-  this._scale = 1.0; // along x-axis (equator)
-  this._offset = {x: 0, y: 0};
-  this._width = 128;
-  this._height = 64;
-  this._getScale = function () {
-    if (this._width / this._height > this._side_ratio)
-    {
-      return this._height * this._side_ratio / 2.0 / Math.PI;
-    }
-    else
-    {
-      return this._width / 2.0 / Math.PI;
-    }
+  constructor ()
+  {
+    super ();
+    this.name = "Mercator";
+    this.side_ratio = 1.0;
+    this.lat_limit = Math.asin (Math.tanh (Math.PI / this.side_ratio));
+    this.lat_prj_limit = Math.atanh (Math.sin (this.lat_limit));
+}
+
+  projectPoint (pt_ab)
+  {
+    return {x: this.draw_width * (pt_ab.a / Math.PI + 1.0) / 2.0 + this.offset.x,
+            y: this.draw_width / this.side_ratio * (1.0 - Math.atanh (Math.sin (pt_ab.b)) / this.lat_prj_limit) / 2.0 + this.offset.y};
   }
-  this._getOffset = function () {
-    return {x: this._width / 2.0 - this._scale * Math.PI,
-            y: this._height / 2.0 - this._scale * Math.PI / this._side_ratio};
+
+  backProjectPoint (pt_xy)
+  {
+    return {a: ((pt_xy.x - this.offset.x) * 2.0 / this.draw_width - 1.0) * Math.PI,
+            b: Math.asin (Math.tanh (this.lat_prj_limit * (1.0 - (pt_xy.y - this.offset.y) / this.draw_width * this.side_ratio * 2.0)))};
   }
-  this.setWidth = function (width) {
-    this._width = width;
-    this._scale = this._getScale ();
-    this._offset = this._getOffset ();
-  }
-  this.setHeight = function (height) {
-    this._height = height;
-    this._scale = this._getScale ();
-    this._offset = this._getOffset ();
-  }
-  this.projectPoint = function (pt_ab) {
-    return {x: this._scale * (pt_ab.a + Math.PI) + this._offset.x,
-            y: this._scale * (this._lat_prj_limit - Math.atanh (Math.sin (pt_ab.b))) + this._offset.y};
-  }
-  this.backProjectPoint = function (pt_xy) {
-    return {a: (pt_xy.x - this._offset.x) / this._scale - Math.PI,
-            b: Math.asin (Math.tanh (this._lat_prj_limit - (pt_xy.y - this._offset.y) / this._scale))};
-  }
-  this.drawPassepartout = function (context) {
-    context.fillStyle = '#101010';
-    context.fillRect (0, 0, this._width, this._height);
-    context.fillStyle = '#8888FF';
-    context.fillRect (this._offset.x, this._offset.y, this._width - 2 * this._offset.x, this._height - 2 * this._offset.y);
-  }
-  this.suppressLine = function (from, to) {
-    return Math.abs (to.b) > this._lat_limit || Math.abs (from.b) > this._lat_limit || Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
+
+  suppressLine (from, to)
+  {
+    return Math.abs (to.b) > this.lat_limit || Math.abs (from.b) > this.lat_limit || Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
   }
 }
 
@@ -387,7 +359,7 @@ function CylindricProjector ()
   }
 }
 
-const projectors = [new EquirectangularProjector (), new OrthographicProjector ()]; //, new MercatorProjector, new CylindricProjector];
+const projectors = [new EquirectangularProjector (), new OrthographicProjector (), new MercatorProjector ()]; //, new CylindricProjector];
 var projector_counter = 0;
 var projector = projectors[projector_counter];
 
