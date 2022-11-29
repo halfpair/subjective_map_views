@@ -166,11 +166,14 @@ var map_data2 = new MapData ();
 
 class BaseProjector
 {
+  name = "";
   side_ratio = 1.0;
   draw_width = 128;
   offset = {x: 0, y: 0};
   width = 128;
   height = 64;
+  frame_color = '#101010';
+  sea_color = '#8888FF'
 
   constructor () {}
 
@@ -199,9 +202,9 @@ class BaseProjector
 
   drawPassepartout (context)
   {
-    context.fillStyle = '#101010';
+    context.fillStyle = this.frame_color;
     context.fillRect (0, 0, this.width, this.height);
-    context.fillStyle = '#8888FF'
+    context.fillStyle = this.sea_color;
     context.fillRect (this.offset.x, this.offset.y, this.draw_width, this.draw_width / this.side_ratio);
   }
 
@@ -216,6 +219,7 @@ class EquirectangularProjector extends BaseProjector
   constructor ()
   {
     super ();
+    this.name = "Equirectangular";
     this.side_ratio = 2.0;
   }
 
@@ -240,54 +244,40 @@ class EquirectangularProjector extends BaseProjector
   }
 }
 
-function OrthographicProjector ()
+class OrthographicProjector extends BaseProjector
 {
-  this._scale = 1.0;
-  this._offset = {x: 0, y: 0};
-  this._width = 64;
-  this._height = 64;
-  this._getScale = function () {
-    if (this._width > this._height)
-    {
-      return this._height;
-    }
-    else
-    {
-      return this._width;
-    }
+  constructor ()
+  {
+    super ();
+    this.name = "Orthographic";
+    this.side_ratio = 1.0;
   }
-  this._getOffset = function () {
-    return {x: (this._width - this._scale) / 2.0,
-            y: (this._height - this._scale) / 2.0};
+
+  projectPoint (pt_ab)
+  {
+    return {x: this.draw_width / 2.0 * (1.0 + Math.sin (pt_ab.a) * Math.cos (pt_ab.b)) + this.offset.x,
+            y: this.draw_width / 2.0 * (1.0 + Math.sin (-pt_ab.b)) + this.offset.y};
   }
-  this.setWidth = function (width) {
-    this._width = width;
-    this._scale = this._getScale ();
-    this._offset = this._getOffset ();
-  }
-  this.setHeight = function (height) {
-    this._height = height;
-    this._scale = this._getScale ();
-    this._offset = this._getOffset ();
-  }
-  this.projectPoint = function (pt_ab) {
-    return {x: this._scale / 2.0 * (1.0 + Math.sin (pt_ab.a) * Math.cos (pt_ab.b)) + this._offset.x,
-            y: this._scale / 2.0 * (1.0 + Math.sin (-pt_ab.b)) + this._offset.y};
-  }
-  this.backProjectPoint = function (pt_xy) {
-    let b = -Math.asin (2.0 * (pt_xy.y - this._offset.y) / this._scale - 1.0);
-    return {a: Math.asin ((2.0 * (pt_xy.x - this._offset.x) / this._scale - 1.0) / Math.cos (b)),
+
+  backProjectPoint (pt_xy)
+  {
+    let b = -Math.asin (2.0 * (pt_xy.y - this.offset.y) / this.draw_width - 1.0);
+    return {a: Math.asin ((2.0 * (pt_xy.x - this.offset.x) / this.draw_width - 1.0) / Math.cos (b)),
             b: b};
   }
-  this.drawPassepartout = function (context) {
-    context.fillStyle = '#101010';
-    context.fillRect (0, 0, this._width, this._height);
-    context.fillStyle = '#8888FF';
+
+  drawPassepartout (context)
+  {
+    context.fillStyle = this.frame_color;
+    context.fillRect (0, 0, this.width, this.height);
+    context.fillStyle = this.sea_color;
     context.beginPath ();
-    context.arc (this._width / 2.0, this._height / 2.0, this._scale / 2.0, 0, Math.PI * 2.0, true);
+    context.arc (this.width / 2.0, this.height / 2.0, this.draw_width / 2.0, 0, Math.PI * 2.0, true);
     context.fill ();
   }
-  this.suppressLine = function (from, to) {
+
+  suppressLine (from, to)
+  {
     let lim = Math.PI / 2.0;
     return Math.abs (to.a) > lim || Math.abs (to.b) > lim || Math.abs (from.a) > lim || Math.abs (from.b) > lim;
   }
@@ -397,7 +387,7 @@ function CylindricProjector ()
   }
 }
 
-const projectors = [new EquirectangularProjector ()];//, new OrthographicProjector (), new MercatorProjector, new CylindricProjector];
+const projectors = [new EquirectangularProjector (), new OrthographicProjector ()]; //, new MercatorProjector, new CylindricProjector];
 var projector_counter = 0;
 var projector = projectors[projector_counter];
 
