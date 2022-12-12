@@ -1,3 +1,52 @@
+class Queue
+{
+  head = 0;
+  tail = 0;
+  values = {};
+
+  constructor (max_length = Number.MAX_VALUE)
+  {
+    this.max_length = max_length;
+  }
+
+  enqueue (value)
+  {
+    this.values[this.tail] = value;
+    this.tail++;
+    if (this.length > this.max_length)
+      this.dequeue ();
+  }
+
+  dequeue ()
+  {
+    const value = this.values[this.head];
+    delete this.values[this.head];
+    this.head++;
+    return value;
+  }
+
+  at (index)
+  {
+    if (index >= this.length)
+      return null;
+    if (index < 0)
+      return this.values[index + this.tail];
+    else
+      return this.values[index + this.head];
+  }
+
+  get length ()
+  {
+    return this.tail - this.head;
+  }
+
+  get isEmpty ()
+  {
+    return this.length === 0;
+  }
+}
+
+
 function ab2xyz (pt_ab)
 {
   return {x: Math.sin (pt_ab.a) * Math.cos (pt_ab.b),
@@ -172,6 +221,7 @@ class BaseProjector
   offset = {x: 0, y: 0};
   width = 128;
   height = 64;
+  passpartout_polygon = [];
   frame_color = '#101010';
   sea_color = '#8888FF'
 
@@ -186,6 +236,12 @@ class BaseProjector
 
     this.offset = {x: (width - this.draw_width) / 2.0,
                    y: (height - this.draw_width / this.side_ratio) / 2.0};
+
+    this.passpartout_polygon = [{x: this.offset.x, y: this.offset.y},
+                                {x: this.offset.x, y: this.offset.y + this.draw_width / this.side_ratio},
+                                {x: this.offset.x + this.draw_width, y: this.offset.y + this.draw_width / this.side_ratio},
+                                {x: this.offset.x + this.draw_width, y: this.offset.y},
+                                {x: this.offset.x, y: this.offset.y}];
   }
 
   projectPoint (pt_ab)
@@ -205,12 +261,21 @@ class BaseProjector
     context.fillStyle = this.frame_color;
     context.fillRect (0, 0, this.width, this.height);
     context.fillStyle = this.sea_color;
-    context.fillRect (this.offset.x, this.offset.y, this.draw_width, this.draw_width / this.side_ratio);
+    context.beginPath ();
+    context.moveTo (this.passpartout_polygon[0].x, this.passpartout_polygon[0].y);
+    for (let i = 1; i < this.passpartout_polygon.length; i++)
+      context.lineTo (this.passpartout_polygon[i].x, this.passpartout_polygon[i].y);
+    context.fill ();
   }
 
   suppressLine (from, to)
   {
     return false;
+  }
+
+  getPassepartoutCutPoint (pt_queue)
+  {
+    return null;
   }
 }
 
@@ -236,6 +301,16 @@ class EquirectangularProjector extends BaseProjector
   suppressLine (from, to)
   {
     return Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
+  }
+
+  getPassepartoutCutPoint (pt_queue)
+  {
+    if (pt_queue.length < 3)
+      return null;
+    let pt_xy_1 = this.projectPoint (pt_queue.at (0));
+    let pt_xy_2 = this.projectPoint (pt_queue.at (1));
+    return pt_xy_1;
+    //return cutPolygon (pt_xy_1, pt_xy_2, this.passpartout_polygon);
   }
 }
 
@@ -469,20 +544,23 @@ var resize_handler = new ResizeHandler ();
 
 function drawPolygon (context, polygon, transformator)
 {
-  let start_point = {a: Number.MAX_VALUE, b: Number.MAX_VALUE};
+  let cut_pts_queue = new Queue (2);
+  let pt_queue = new Queue (3);
+  pt_queue.enqueue ({a: Number.MAX_VALUE, b: Number.MAX_VALUE});
   for (const pt_xyz of polygon)
   {
     let pt_ab = xyz2ab (transformator.transformPoint (pt_xyz));
+    pt_queue.enqueue (pt_ab);
     let pt_xy = projector.projectPoint (pt_ab);
-    if (projector.suppressLine (start_point, pt_ab))
+    if (projector.suppressLine (pt_queue.at (-2), pt_queue.at (-1)))
     {
+      projector.getPassepartoutCutPoint (pt_queue);
       context.moveTo (pt_xy.x, pt_xy.y);
     } 
     else
     {
       context.lineTo (pt_xy.x, pt_xy.y);
     }
-    start_point = pt_ab;
   }
 }
 
