@@ -79,15 +79,15 @@ function loadJsonData (src_url, converter, data)
 
 function json2MapData (json_data, data)
 {
-  for (const data_set of json_data)
-  {
+  //for (const data_set of json_data)
+  //{
     let point_set = [];
-    for (const element of data_set)
+    for (const element of json_data[17]) //data_set)
     {
       point_set.push (ab2xyz ({a: element[0] * Math.PI / 180.0, b: element[1] * Math.PI / 180.0}));
     }
     data.polygons.push (point_set);
-  }
+  //}
   map_data2.polygons = structuredClone (data.polygons);
   map_data2.loaded = true;
 }
@@ -307,10 +307,26 @@ class EquirectangularProjector extends BaseProjector
   {
     if (pt_queue.length < 3)
       return null;
-    let pt_xy_1 = this.projectPoint (pt_queue.at (0));
-    let pt_xy_2 = this.projectPoint (pt_queue.at (1));
-    return pt_xy_1;
-    //return cutPolygon (pt_xy_1, pt_xy_2, this.passpartout_polygon);
+    
+    // for line intersection computation see https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+    let pt1 = this.projectPoint (pt_queue.at (0));
+    let pt2 = this.projectPoint (pt_queue.at (1));
+    if (this.passpartout_polygon.length > 2)
+      for (let i = 0; i < this.passpartout_polygon.length - 1; i++)
+      {
+        let pt3 = this.passpartout_polygon[i];
+        let pt4 = this.passpartout_polygon[i+1];
+        let divisor = (pt1.x - pt2.x) * (pt3.y - pt4.y) - (pt1.y - pt2.y) * (pt3.x - pt4.x);
+        if (Math.abs (divisor) > 1.e-12)
+        {
+          let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
+          let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
+          console.log (pt1, pt2, i, t, u);
+          if (t >= 0.0 && u >= 0.0 && u <= 1.0)
+            return {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)};
+        }
+      }
+    return null;
   }
 }
 
@@ -553,10 +569,30 @@ function drawPolygon (context, polygon, transformator)
     pt_queue.enqueue (pt_ab);
     let pt_xy = projector.projectPoint (pt_ab);
     if (projector.suppressLine (pt_queue.at (-2), pt_queue.at (-1)))
-    {
-      projector.getPassepartoutCutPoint (pt_queue);
       context.moveTo (pt_xy.x, pt_xy.y);
-    } 
+    else
+      context.lineTo (pt_xy.x, pt_xy.y);
+  }
+}
+
+function drawArea (context, polygon, transformator)
+{
+  let cut_pts = [];
+  let pt_queue = new Queue (3);
+  let pt_ab0 = xyz2ab (transformator.transformPoint (polygon[0]));
+  pt_queue.enqueue (pt_ab0);
+  let pt_xy0 = projector.projectPoint (pt_ab0);
+  context.moveTo (pt_xy0.x, pt_xy0.y);
+  for (const pt_xyz of polygon.slice (1))
+  {
+    let pt_ab = xyz2ab (transformator.transformPoint (pt_xyz));
+    pt_queue.enqueue (pt_ab);
+    let pt_xy = projector.projectPoint (pt_ab);
+    if (projector.suppressLine (pt_queue.at (-2), pt_queue.at (-1)))
+    {
+      console.log (pt_queue.at (-2), pt_queue.at(-1), projector.getPassepartoutCutPoint (pt_queue));
+      context.moveTo (pt_xy.x, pt_xy.y);
+    }
     else
     {
       context.lineTo (pt_xy.x, pt_xy.y);
@@ -576,21 +612,21 @@ function drawPolygons ()
     let context = map.getContext ("2d");
     projector.drawPassepartout (context);
     context.lineWidth = 1;
-    context.strokeStyle = "#CCCCCC";
-    context.fillStyle = "rgba(0,128,0,0.5)";
-    context.beginPath ();
-    for (const polygon of map_data2.polygons)
-    {
-      drawPolygon (context, polygon, map_data2.transformator);
-    }
-    context.fill ();
-    context.stroke ();
+    //context.strokeStyle = "#CCCCCC";
+    //context.fillStyle = "rgba(0,128,0,0.5)";
+    //context.beginPath ();
+    //for (const polygon of map_data2.polygons)
+    //{
+    //  drawPolygon (context, polygon, map_data2.transformator);
+    //}
+    //context.fill ();
+    //context.stroke ();
     context.strokeStyle = "#CCCCCC";
     context.fillStyle = "rgba(128,0,0,0.5)";
     context.beginPath ();
     for (const polygon of map_data1.polygons)
     {
-      drawPolygon (context, polygon, map_data1.transformator);
+      drawArea (context, polygon, map_data1.transformator);
     }
     context.fill ();
     context.stroke ();
