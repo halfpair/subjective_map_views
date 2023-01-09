@@ -214,7 +214,7 @@ class BaseProjector
     context.fillStyle = this.sea_color;
     context.beginPath ();
     context.moveTo (this.passpartout_polygon[0].x, this.passpartout_polygon[0].y);
-    for (let i = 1; i < this.passpartout_polygon.length; i++)
+    for (let i = 1, n = this.passpartout_polygon.length; i < n; i++)
       context.lineTo (this.passpartout_polygon[i].x, this.passpartout_polygon[i].y);
     context.fill ();
   }
@@ -224,9 +224,50 @@ class BaseProjector
     return false;
   }
 
-  getPassepartoutCutPoint (pt_queue)
+  getPassepartoutCutPoint (pt1, pt2)
   {
+    // for line intersection computation see https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+    for (let i = 0, n = this.passpartout_polygon.length - 1; i < n; i++)
+    {
+      let pt3 = this.passpartout_polygon[i];
+      let pt4 = this.passpartout_polygon[i+1];
+      let divisor = (pt1.x - pt2.x) * (pt3.y - pt4.y) - (pt1.y - pt2.y) * (pt3.x - pt4.x);
+      if (Math.abs (divisor) > 1.e-12)
+      {
+        let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
+        let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
+        if (t >= 0.0 && u >= 0.0 && u <= 1.0)
+          return {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)};
+      }
+    }
     return null;
+  }
+
+  getCuttedPolygons (pts_xy, cuts)
+  {
+    if (cuts.length == pts_xy.length - 1)  // nothing to render
+      return [];
+    
+    if (cuts.length == 0)  // nothing to cut
+      return [pts_xy];
+    
+    let result = [];
+    let first = 0;
+    console.log (cuts);
+    for (const cut of cuts)
+    {
+      let pts_cut = pts_xy.slice (first, cut + 1);
+      console.log (first, cut + 1, pts_cut);
+      if (pts_cut.length > 2)  // at least an angle
+      {
+        console.log (this.getPassepartoutCutPoint (pts_cut[1], pts_cut[0]));
+        const l = pts_cut.length;
+        console.log (this.getPassepartoutCutPoint (pts_cut[l - 2], pts_cut[l - 1]));
+        result.push (pts_cut);
+      }
+      first = cut + 1;
+    }
+    return result;
   }
 }
 
@@ -252,32 +293,6 @@ class EquirectangularProjector extends BaseProjector
   suppressLine (from, to)
   {
     return Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
-  }
-
-  getPassepartoutCutPoint (pt_queue)
-  {
-    if (pt_queue.length < 3)
-      return null;
-    
-    // for line intersection computation see https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
-    let pt1 = this.projectPoint (pt_queue.at (0));
-    let pt2 = this.projectPoint (pt_queue.at (1));
-    if (this.passpartout_polygon.length > 2)
-      for (let i = 0; i < this.passpartout_polygon.length - 1; i++)
-      {
-        let pt3 = this.passpartout_polygon[i];
-        let pt4 = this.passpartout_polygon[i+1];
-        let divisor = (pt1.x - pt2.x) * (pt3.y - pt4.y) - (pt1.y - pt2.y) * (pt3.x - pt4.x);
-        if (Math.abs (divisor) > 1.e-12)
-        {
-          let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
-          let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
-          console.log (pt1, pt2, i, t, u);
-          if (t >= 0.0 && u >= 0.0 && u <= 1.0)
-            return {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)};
-        }
-      }
-    return null;
   }
 }
 
@@ -535,7 +550,7 @@ function drawArea (context, polygon, transformator)
     if (projector.suppressLine (pts_ab[i], pts_ab[i + 1]))
       cuts.push (i);
   let pts_xy = pts_ab.map (function (pt_ab) { return projector.projectPoint (pt_ab); });
-  //let sub_polygons = projector.getCuttedPolygons (pts_xy, cuts);
+  let sub_polygons = projector.getCuttedPolygons (pts_xy, cuts);
   context.moveTo (pts_xy[0].x, pts_xy[0].y);
   for (let i = 1, n = pts_xy.length; i < n; i++)
   {
