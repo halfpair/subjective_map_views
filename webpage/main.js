@@ -512,15 +512,18 @@ var resize_handler = new ResizeHandler ();
 function drawPolygon (context, polygon, transformator)
 {
   let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint (pt_xyz)); });
-  let pt_xy_0 = projector.projectPoint (pts_ab[0]);
-  context.moveTo (pt_xy_0.x, pt_xy_0.y);
-  for (let i = 1, n = pts_ab.length; i < n; i++)
+  let cuts = [];
+  for (let i = 0, n = pts_ab.length - 1; i < n; i++)
+    if (projector.suppressLine (pts_ab[i], pts_ab[i + 1]))
+      cuts.push (i);
+  let pts_xy = pts_ab.map (function (pt_ab) { return projector.projectPoint (pt_ab); });
+  context.moveTo (pts_xy[0].x, pts_xy[0].y);
+  for (let i = 1, n = pts_xy.length; i < n; i++)
   {
-    let pt_xy = projector.projectPoint (pts_ab[i]);
-    if (projector.suppressLine (pts_ab[i - 1], pts_ab[i]))
-      context.moveTo (pt_xy.x, pt_xy.y);
+    if (cuts.indexOf (i - 1) > -1)
+      context.moveTo (pts_xy[i].x, pts_xy[i].y);
     else
-      context.lineTo (pt_xy.x, pt_xy.y);
+      context.lineTo (pts_xy[i].x, pts_xy[i].y);
   }
 }
 
@@ -528,18 +531,18 @@ function drawArea (context, polygon, transformator)
 {
   let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint (pt_xyz)); });
   let cuts = [];
-  for (let i = 0, n = pts_ab.legnth - 1; i < n; i++)
+  for (let i = 0, n = pts_ab.length - 1; i < n; i++)
     if (projector.suppressLine (pts_ab[i], pts_ab[i + 1]))
       cuts.push (i);
-  let pt_xy_0 = projector.projectPoint (pts_ab[0]);
-  context.moveTo (pt_xy_0.x, pt_xy_0.y);
-  for (let i = 1, n = pts_ab.length; i < n; i++)
+  let pts_xy = pts_ab.map (function (pt_ab) { return projector.projectPoint (pt_ab); });
+  //let sub_polygons = projector.getCuttedPolygons (pts_xy, cuts);
+  context.moveTo (pts_xy[0].x, pts_xy[0].y);
+  for (let i = 1, n = pts_xy.length; i < n; i++)
   {
-    let pt_xy = projector.projectPoint (pts_ab[i]);
-    if (projector.suppressLine (pts_ab[i - 1], pts_ab[i]))
-      context.moveTo (pt_xy.x, pt_xy.y);
+    if (cuts.indexOf (i - 1) > -1)
+      context.moveTo (pts_xy[i].x, pts_xy[i].y);
     else
-      context.lineTo (pt_xy.x, pt_xy.y);
+      context.lineTo (pts_xy[i].x, pts_xy[i].y);
   }
 }
 
