@@ -1,52 +1,3 @@
-class Queue
-{
-  head = 0;
-  tail = 0;
-  values = {};
-
-  constructor (max_length = Number.MAX_VALUE)
-  {
-    this.max_length = max_length;
-  }
-
-  enqueue (value)
-  {
-    this.values[this.tail] = value;
-    this.tail++;
-    if (this.length > this.max_length)
-      this.dequeue ();
-  }
-
-  dequeue ()
-  {
-    const value = this.values[this.head];
-    delete this.values[this.head];
-    this.head++;
-    return value;
-  }
-
-  at (index)
-  {
-    if (index >= this.length)
-      return null;
-    if (index < 0)
-      return this.values[index + this.tail];
-    else
-      return this.values[index + this.head];
-  }
-
-  get length ()
-  {
-    return this.tail - this.head;
-  }
-
-  get isEmpty ()
-  {
-    return this.length === 0;
-  }
-}
-
-
 function ab2xyz (pt_ab)
 {
   return {x: Math.sin (pt_ab.a) * Math.cos (pt_ab.b),
@@ -560,15 +511,13 @@ var resize_handler = new ResizeHandler ();
 
 function drawPolygon (context, polygon, transformator)
 {
-  let cut_pts_queue = new Queue (2);
-  let pt_queue = new Queue (3);
-  pt_queue.enqueue ({a: Number.MAX_VALUE, b: Number.MAX_VALUE});
-  for (const pt_xyz of polygon)
+  let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint (pt_xyz)); });
+  let pt_xy_0 = projector.projectPoint (pts_ab[0]);
+  context.moveTo (pt_xy_0.x, pt_xy_0.y);
+  for (let i = 1, n = pts_ab.length; i < n; i++)
   {
-    let pt_ab = xyz2ab (transformator.transformPoint (pt_xyz));
-    pt_queue.enqueue (pt_ab);
-    let pt_xy = projector.projectPoint (pt_ab);
-    if (projector.suppressLine (pt_queue.at (-2), pt_queue.at (-1)))
+    let pt_xy = projector.projectPoint (pts_ab[i]);
+    if (projector.suppressLine (pts_ab[i - 1], pts_ab[i]))
       context.moveTo (pt_xy.x, pt_xy.y);
     else
       context.lineTo (pt_xy.x, pt_xy.y);
@@ -577,26 +526,20 @@ function drawPolygon (context, polygon, transformator)
 
 function drawArea (context, polygon, transformator)
 {
-  let cut_pts = [];
-  let pt_queue = new Queue (3);
-  let pt_ab0 = xyz2ab (transformator.transformPoint (polygon[0]));
-  pt_queue.enqueue (pt_ab0);
-  let pt_xy0 = projector.projectPoint (pt_ab0);
-  context.moveTo (pt_xy0.x, pt_xy0.y);
-  for (const pt_xyz of polygon.slice (1))
+  let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint (pt_xyz)); });
+  let cuts = [];
+  for (let i = 0, n = pts_ab.legnth - 1; i < n; i++)
+    if (projector.suppressLine (pts_ab[i], pts_ab[i + 1]))
+      cuts.push (i);
+  let pt_xy_0 = projector.projectPoint (pts_ab[0]);
+  context.moveTo (pt_xy_0.x, pt_xy_0.y);
+  for (let i = 1, n = pts_ab.length; i < n; i++)
   {
-    let pt_ab = xyz2ab (transformator.transformPoint (pt_xyz));
-    pt_queue.enqueue (pt_ab);
-    let pt_xy = projector.projectPoint (pt_ab);
-    if (projector.suppressLine (pt_queue.at (-2), pt_queue.at (-1)))
-    {
-      console.log (pt_queue.at (-2), pt_queue.at(-1), projector.getPassepartoutCutPoint (pt_queue));
+    let pt_xy = projector.projectPoint (pts_ab[i]);
+    if (projector.suppressLine (pts_ab[i - 1], pts_ab[i]))
       context.moveTo (pt_xy.x, pt_xy.y);
-    }
     else
-    {
       context.lineTo (pt_xy.x, pt_xy.y);
-    }
   }
 }
 
