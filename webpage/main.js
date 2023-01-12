@@ -237,36 +237,65 @@ class BaseProjector
         let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
         let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
         if (t >= 0.0 && u >= 0.0 && u <= 1.0)
-          return {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)};
+          return {ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}};
       }
     }
     return null;
   }
 
-  getCuttedPolygons (pts_xy, cuts)
+  getCuttedPolygons (pts_xy, suppressed_lines)
   {
-    if (cuts.length == pts_xy.length - 1)  // nothing to render
+    if (suppressed_lines.length == pts_xy.length - 1)  // nothing to render
       return [];
     
-    if (cuts.length == 0)  // nothing to cut
+    if (suppressed_lines.length == 0)  // nothing to cut
       return [pts_xy];
     
     let result = [];
-    let first = 0;
-    console.log (cuts);
-    for (const cut of cuts)
+    console.log (suppressed_lines);
+    let pp_pts = [];  // passepartout points
+    let first = suppressed_lines[0] + 1;
+    for (let i = 1, n = suppressed_lines.length; i < n; i++)
     {
-      let pts_cut = pts_xy.slice (first, cut + 1);
-      console.log (first, cut + 1, pts_cut);
-      if (pts_cut.length > 2)  // at least an angle
+      const suppressed_line = suppressed_lines[i];
+      let render_pts = pts_xy.slice (first, suppressed_line + 1);
+      if (render_pts.length > 2)  // at least an angle
       {
-        console.log (this.getPassepartoutCutPoint (pts_cut[1], pts_cut[0]));
-        const l = pts_cut.length;
-        console.log (this.getPassepartoutCutPoint (pts_cut[l - 2], pts_cut[l - 1]));
-        result.push (pts_cut);
+        const pp_pt_in = this.getPassepartoutCutPoint (render_pts[1], render_pts[0]);
+        if (pp_pt_in != null)
+          pp_pts.push ({is_in: true,
+                        pt: pp_pt_in.pt,
+                        ppp_id: pp_pt_in.ppp_id,
+                        u: pp_pt_in.u,
+                        pxy_id: first
+                      });
+        const l = render_pts.length;
+        const pp_pt_out = this.getPassepartoutCutPoint (render_pts[l - 2], render_pts[l - 1]);
+        if (pp_pt_out != null)
+          pp_pts.push ({is_in: false,
+                        pt: pp_pt_out.pt,
+                        ppp_id: pp_pt_out.ppp_id,
+                        u: pp_pt_out.u,
+                        pxy_id: suppressed_line
+                      });
       }
-      first = cut + 1;
+      first = suppressed_line + 1;
     }
+    if (pts_xy.length - (suppressed_lines[suppressed_lines.length - 1] + 1 - suppressed_lines[0]) > 3)
+    {
+      let render_pts = pts_xy.slice (suppressed_lines[suppressed_lines.length - 1] + 1);
+      let render_pts2 = pts_xy.slice (0, suppressed_lines[0] + 1);
+      if (render_pts.length > render_pts2.length)
+        render_pts.pop ();
+      else
+        render_pts2.shift ();
+      render_pts = render_pts.concat (render_pts2);
+      // TODO: Do the same as above.
+    }
+
+    pp_pts.sort (function (v1, v2) { if (v1.ppp_id < v2.ppp_id) return -1; if (v1.ppp_id > v2.ppp_id) return 1; if (v1.u < v2.u) return -1; return 1;});
+    console.log (pp_pts);
+
     return result;
   }
 }
@@ -545,16 +574,16 @@ function drawPolygon (context, polygon, transformator)
 function drawArea (context, polygon, transformator)
 {
   let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint (pt_xyz)); });
-  let cuts = [];
+  let suppressed_lines = [];
   for (let i = 0, n = pts_ab.length - 1; i < n; i++)
     if (projector.suppressLine (pts_ab[i], pts_ab[i + 1]))
-      cuts.push (i);
+      suppressed_lines.push (i);
   let pts_xy = pts_ab.map (function (pt_ab) { return projector.projectPoint (pt_ab); });
-  let sub_polygons = projector.getCuttedPolygons (pts_xy, cuts);
+  let sub_polygons = projector.getCuttedPolygons (pts_xy, suppressed_lines);
   context.moveTo (pts_xy[0].x, pts_xy[0].y);
   for (let i = 1, n = pts_xy.length; i < n; i++)
   {
-    if (cuts.indexOf (i - 1) > -1)
+    if (suppressed_lines.indexOf (i - 1) > -1)
       context.moveTo (pts_xy[i].x, pts_xy[i].y);
     else
       context.lineTo (pts_xy[i].x, pts_xy[i].y);
