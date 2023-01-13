@@ -243,6 +243,32 @@ class BaseProjector
     return null;
   }
 
+  getPassepartoutPoint (render_pts, first_id, last_id)
+  {
+    let result = [];
+    if (render_pts.length > 2)  // at least an angle
+    {
+      const pp_pt_in = this.getPassepartoutCutPoint (render_pts[1], render_pts[0]);
+      if (pp_pt_in != null)
+        result.push ({is_in: true,
+                      pt: pp_pt_in.pt,
+                      ppp_id: pp_pt_in.ppp_id,
+                      u: pp_pt_in.u,
+                      pxy_id: first_id
+                    });
+      const l = render_pts.length;
+      const pp_pt_out = this.getPassepartoutCutPoint (render_pts[l - 2], render_pts[l - 1]);
+      if (pp_pt_out != null)
+        result.push ({is_in: false,
+                      pt: pp_pt_out.pt,
+                      ppp_id: pp_pt_out.ppp_id,
+                      u: pp_pt_out.u,
+                      pxy_id: last_id
+                    });
+    }
+    return result;
+}
+
   getCuttedPolygons (pts_xy, suppressed_lines)
   {
     if (suppressed_lines.length == pts_xy.length - 1)  // nothing to render
@@ -254,43 +280,26 @@ class BaseProjector
     let result = [];
     console.log (suppressed_lines);
     let pp_pts = [];  // passepartout points
+    // handle all parts "inside"
     let first = suppressed_lines[0] + 1;
     for (let i = 1, n = suppressed_lines.length; i < n; i++)
     {
       const suppressed_line = suppressed_lines[i];
       let render_pts = pts_xy.slice (first, suppressed_line + 1);
-      if (render_pts.length > 2)  // at least an angle
-      {
-        const pp_pt_in = this.getPassepartoutCutPoint (render_pts[1], render_pts[0]);
-        if (pp_pt_in != null)
-          pp_pts.push ({is_in: true,
-                        pt: pp_pt_in.pt,
-                        ppp_id: pp_pt_in.ppp_id,
-                        u: pp_pt_in.u,
-                        pxy_id: first
-                      });
-        const l = render_pts.length;
-        const pp_pt_out = this.getPassepartoutCutPoint (render_pts[l - 2], render_pts[l - 1]);
-        if (pp_pt_out != null)
-          pp_pts.push ({is_in: false,
-                        pt: pp_pt_out.pt,
-                        ppp_id: pp_pt_out.ppp_id,
-                        u: pp_pt_out.u,
-                        pxy_id: suppressed_line
-                      });
-      }
+      pp_pts = pp_pts.concat (this.getPassepartoutPoint (render_pts, first, suppressed_line));
       first = suppressed_line + 1;
     }
+    // handle "frame"-part especially
     if (pts_xy.length - (suppressed_lines[suppressed_lines.length - 1] + 1 - suppressed_lines[0]) > 3)
     {
       let render_pts = pts_xy.slice (suppressed_lines[suppressed_lines.length - 1] + 1);
       let render_pts2 = pts_xy.slice (0, suppressed_lines[0] + 1);
-      if (render_pts.length > render_pts2.length)
+      if (render_pts.length > render_pts2.length && render_pts2.length > 0)
         render_pts.pop ();
-      else
+      else if (render_pts.length > 0)
         render_pts2.shift ();
       render_pts = render_pts.concat (render_pts2);
-      // TODO: Do the same as above.
+      pp_pts = pp_pts.concat (this.getPassepartoutPoint (render_pts, suppressed_lines[suppressed_lines.length - 1] + 1, suppressed_lines[0]));
     }
 
     pp_pts.sort (function (v1, v2) { if (v1.ppp_id < v2.ppp_id) return -1; if (v1.ppp_id > v2.ppp_id) return 1; if (v1.u < v2.u) return -1; return 1;});
