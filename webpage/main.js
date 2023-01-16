@@ -30,15 +30,15 @@ function loadJsonData (src_url, converter, data)
 
 function json2MapData (json_data, data)
 {
-  //for (const data_set of json_data)
-  //{
+  for (const data_set of json_data)
+  {
     let point_set = [];
-    for (const element of json_data[17]) //data_set)
+    for (const element of data_set) //json_data[17]) //data_set)
     {
       point_set.push (ab2xyz ({a: element[0] * Math.PI / 180.0, b: element[1] * Math.PI / 180.0}));
     }
     data.polygons.push (point_set);
-  //}
+  }
   map_data2.polygons = structuredClone (data.polygons);
   map_data2.loaded = true;
 }
@@ -224,51 +224,6 @@ class BaseProjector
     return false;
   }
 
-  getPassepartoutCutPoint (pt1, pt2)
-  {
-    // for line intersection computation see https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
-    for (let i = 0, n = this.passpartout_polygon.length - 1; i < n; i++)
-    {
-      let pt3 = this.passpartout_polygon[i];
-      let pt4 = this.passpartout_polygon[i+1];
-      let divisor = (pt1.x - pt2.x) * (pt3.y - pt4.y) - (pt1.y - pt2.y) * (pt3.x - pt4.x);
-      if (Math.abs (divisor) > 1.e-12)
-      {
-        let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
-        let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
-        if (t >= 0.0 && u >= 0.0 && u <= 1.0)
-          return {ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}};
-      }
-    }
-    return null;
-  }
-
-  getPassepartoutPoint (render_pts, first_id, last_id)
-  {
-    let result = [];
-    if (render_pts.length > 2)  // at least an angle
-    {
-      const pp_pt_in = this.getPassepartoutCutPoint (render_pts[1], render_pts[0]);
-      if (pp_pt_in != null)
-        result.push ({is_in: true,
-                      pt: pp_pt_in.pt,
-                      ppp_id: pp_pt_in.ppp_id,
-                      u: pp_pt_in.u,
-                      pxy_id: first_id
-                    });
-      const l = render_pts.length;
-      const pp_pt_out = this.getPassepartoutCutPoint (render_pts[l - 2], render_pts[l - 1]);
-      if (pp_pt_out != null)
-        result.push ({is_in: false,
-                      pt: pp_pt_out.pt,
-                      ppp_id: pp_pt_out.ppp_id,
-                      u: pp_pt_out.u,
-                      pxy_id: last_id
-                    });
-    }
-    return result;
-}
-
   getCuttedPolygons (pts_xy, suppressed_lines)
   {
     if (suppressed_lines.length == pts_xy.length - 1)  // nothing to render
@@ -277,33 +232,69 @@ class BaseProjector
     if (suppressed_lines.length == 0)  // nothing to cut
       return [pts_xy];
     
+
+    function getClosedPolygonCutPointFromInside (pt1, pt2, closed_polygon)
+    {
+      // for line intersection computation see https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+      for (let i = 0, n = closed_polygon.length - 1; i < n; i++)
+      {
+        let pt3 = closed_polygon[i];
+        let pt4 = closed_polygon[i+1];
+        let divisor = (pt1.x - pt2.x) * (pt3.y - pt4.y) - (pt1.y - pt2.y) * (pt3.x - pt4.x);
+        if (Math.abs (divisor) > 1.e-12)
+        {
+          let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
+          let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
+          if (t >= 0.0 && u >= 0.0 && u <= 1.0)
+            return {ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}};
+        }
+      }
+      return {ppp_id: -1, u: 0.0, pt: {x: 0.0, y: 0.0}};  // should never happen
+    }
+
+    function handleSubPolygon (pts, closed_polygon)  // pts must have at least length 2
+    {
+      let sub_polygon = {}
+      sub_polygon.pts = pts;
+      let cut_pt = getClosedPolygonCutPointFromInside (sub_polygon.pts[1], sub_polygon.pts[0], closed_polygon);
+      sub_polygon.pts.unshift (cut_pt.pt);
+      sub_polygon.in_id = cut_pt.ppp_id;
+      sub_polygon.in_u = cut_pt.u;
+      const l = sub_polygon.pts.length;
+      cut_pt = getClosedPolygonCutPointFromInside (sub_polygon.pts[l-2], sub_polygon.pts[l-1], closed_polygon);
+      sub_polygon.pts.push (cut_pt.pt);
+      sub_polygon.out_id = cut_pt.ppp_id;
+      sub_polygon.out_u = cut_pt.u;
+      return sub_polygon;
+    }
+
     let result = [];
-    console.log (suppressed_lines);
-    let pp_pts = [];  // passepartout points
+    let sub_polygons = {};
     // handle all parts "inside"
     let first = suppressed_lines[0] + 1;
     for (let i = 1, n = suppressed_lines.length; i < n; i++)
     {
       const suppressed_line = suppressed_lines[i];
-      let render_pts = pts_xy.slice (first, suppressed_line + 1);
-      pp_pts = pp_pts.concat (this.getPassepartoutPoint (render_pts, first, suppressed_line));
+      if (suppressed_line + 1 - first > 2)  // at least an angle
+      {
+        sub_polygons[first] = handleSubPolygon (pts_xy.slice (first, suppressed_line + 1), this.passpartout_polygon);
+        result.push (sub_polygons[first].pts);
+      }
       first = suppressed_line + 1;
     }
     // handle "frame"-part especially
     if (pts_xy.length - (suppressed_lines[suppressed_lines.length - 1] + 1 - suppressed_lines[0]) > 3)
     {
-      let render_pts = pts_xy.slice (suppressed_lines[suppressed_lines.length - 1] + 1);
+      const last = suppressed_lines[suppressed_lines.length - 1] + 1;
+      let render_pts = pts_xy.slice (last);
       let render_pts2 = pts_xy.slice (0, suppressed_lines[0] + 1);
       if (render_pts.length > render_pts2.length && render_pts2.length > 0)
         render_pts.pop ();
       else if (render_pts.length > 0)
         render_pts2.shift ();
-      render_pts = render_pts.concat (render_pts2);
-      pp_pts = pp_pts.concat (this.getPassepartoutPoint (render_pts, suppressed_lines[suppressed_lines.length - 1] + 1, suppressed_lines[0]));
+      sub_polygons[last] = handleSubPolygon (render_pts.concat (render_pts2), this.passpartout_polygon);
+      result.push (sub_polygons[last].pts);
     }
-
-    pp_pts.sort (function (v1, v2) { if (v1.ppp_id < v2.ppp_id) return -1; if (v1.ppp_id > v2.ppp_id) return 1; if (v1.u < v2.u) return -1; return 1;});
-    console.log (pp_pts);
 
     return result;
   }
@@ -589,13 +580,11 @@ function drawArea (context, polygon, transformator)
       suppressed_lines.push (i);
   let pts_xy = pts_ab.map (function (pt_ab) { return projector.projectPoint (pt_ab); });
   let sub_polygons = projector.getCuttedPolygons (pts_xy, suppressed_lines);
-  context.moveTo (pts_xy[0].x, pts_xy[0].y);
-  for (let i = 1, n = pts_xy.length; i < n; i++)
+  for (const sub_polygon of sub_polygons)
   {
-    if (suppressed_lines.indexOf (i - 1) > -1)
-      context.moveTo (pts_xy[i].x, pts_xy[i].y);
-    else
-      context.lineTo (pts_xy[i].x, pts_xy[i].y);
+    context.moveTo (sub_polygon[0].x, sub_polygon[0].y);
+    for (const pt of sub_polygon)
+      context.lineTo (pt.x, pt.y);
   }
 }
 
