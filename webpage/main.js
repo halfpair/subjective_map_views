@@ -236,6 +236,7 @@ class BaseProjector
     function getClosedPolygonCutPointFromInside (pt1, pt2, closed_polygon)
     {
       // for line intersection computation see https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+      let result = {ppp_id: -1, u: 0.0, pt: {x: 0.0, y: 0.0}};
       for (let i = 0, n = closed_polygon.length - 1; i < n; i++)
       {
         let pt3 = closed_polygon[i];
@@ -246,10 +247,35 @@ class BaseProjector
           let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
           let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
           if (t >= 0.0 && u >= 0.0 && u <= 1.0)
-            return {ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}};
+          {
+            result = {ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}};
+            break;
+          }
         }
       }
-      return {ppp_id: -1, u: 0.0, pt: {x: 0.0, y: 0.0}};  // should never happen
+      // avoid spikes in the wrong direction
+      const pt1_pt2_d2 = (pt2.x - pt1.x)**2 + (pt2.y - pt1.y)**2;
+      const pt2_pt_d2 = (result.pt.x - pt2.x)**2 + (result.pt.y - pt2.y)**2;
+      if (pt2_pt_d2 > 100 * pt1_pt2_d2)
+      {
+        let valid_prj_pts = [];
+        for (let i = 0, n = closed_polygon.length - 1; i < n; i++)
+        {
+          let pt3 = closed_polygon[i];
+          let pt4 = closed_polygon[i+1];
+          let f1 = pt3.x - pt4.x;
+          let f2 = pt4.y - pt3.y;
+          let divisor = f1**2 - (pt3.y - pt4.y) * f2;
+          if (Math.abs (divisor) > 1.e-12)
+          {
+            let u = ((pt3.x - pt2.x) * f1 - (pt3.y - pt2.y) * f2) / divisor;
+            if (u >= 0.0 && u <= 1.0)
+              valid_prj_pts.push ({ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}});
+          }
+        }
+        result = valid_prj_pts.sort (function (a, b) { return ((a.pt.x - pt2.x)**2 + (a.pt.y - pt2.y)**2) - ((b.pt.x - pt2.x)**2 + (b.pt.y - pt2.y)**2); })[0];
+      }
+      return result;  // should never happen
     }
 
     function handleSubPolygon (pts, closed_polygon)  // pts must have at least length 2
