@@ -294,18 +294,14 @@ class BaseProjector
       return sub_polygon;
     }
 
-    let result = [];
-    let sub_polygons = {};
+    let sub_polygons = [];
     // handle all parts "inside"
     let first = suppressed_lines[0] + 1;
     for (let i = 1, n = suppressed_lines.length; i < n; i++)
     {
       const suppressed_line = suppressed_lines[i];
       if (suppressed_line + 1 - first > 2)  // at least an angle
-      {
-        sub_polygons[first] = handleSubPolygon (pts_xy.slice (first, suppressed_line + 1), this.passpartout_polygon);
-        result.push (sub_polygons[first].pts);
-      }
+        sub_polygons.push (handleSubPolygon (pts_xy.slice (first, suppressed_line + 1), this.passpartout_polygon));
       first = suppressed_line + 1;
     }
     // handle "frame"-part especially
@@ -318,8 +314,19 @@ class BaseProjector
         render_pts.pop ();
       else if (render_pts.length > 0)
         render_pts2.shift ();
-      sub_polygons[last] = handleSubPolygon (render_pts.concat (render_pts2), this.passpartout_polygon);
-      result.push (sub_polygons[last].pts);
+      sub_polygons.push (handleSubPolygon (render_pts.concat (render_pts2), this.passpartout_polygon));
+    }
+
+    let result = [];
+    let used_sub_polygons = [];
+    for (let i = 0, n = sub_polygons.length; i < n; i++)
+    {
+      if (used_sub_polygons.indexOf (i) < 0)
+      {
+        result.push (sub_polygons[i].pts);
+        let pp_dists = sub_polygons.map (function (a) { return a.in_id - sub_polygons[i].out_id});
+      }
+      used_sub_polygons.push (i);
     }
 
     return result;
