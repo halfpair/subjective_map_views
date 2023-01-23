@@ -30,10 +30,10 @@ function loadJsonData (src_url, converter, data)
 
 function json2MapData (json_data, data)
 {
-  for (const data_set of json_data)
+  //for (const data_set of json_data)
   {
     let point_set = [];
-    for (const element of data_set) //json_data[17]) //data_set)
+    for (const element of json_data[17]) //data_set)
     {
       point_set.push (ab2xyz ({a: element[0] * Math.PI / 180.0, b: element[1] * Math.PI / 180.0}));
     }
@@ -237,26 +237,26 @@ class BaseProjector
     {
       // for line intersection computation see https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
       let result = {ppp_id: -1, u: 0.0, pt: {x: 0.0, y: 0.0}};
-      for (let i = 0, n = closed_polygon.length - 1; i < n; i++)
-      {
-        let pt3 = closed_polygon[i];
-        let pt4 = closed_polygon[i+1];
-        let divisor = (pt1.x - pt2.x) * (pt3.y - pt4.y) - (pt1.y - pt2.y) * (pt3.x - pt4.x);
-        if (Math.abs (divisor) > 1.e-12)
-        {
-          let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
-          let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
-          if (t >= 0.0 && u >= 0.0 && u <= 1.0)
-          {
-            result = {ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}};
-            break;
-          }
-        }
-      }
+      //for (let i = 0, n = closed_polygon.length - 1; i < n; i++)
+      //{
+      //  let pt3 = closed_polygon[i];
+      //  let pt4 = closed_polygon[i+1];
+      //  let divisor = (pt1.x - pt2.x) * (pt3.y - pt4.y) - (pt1.y - pt2.y) * (pt3.x - pt4.x);
+      //  if (Math.abs (divisor) > 1.e-12)
+      //  {
+      //    let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
+      //    let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
+      //    if (t >= 0.0 && u >= 0.0 && u <= 1.0)
+      //    {
+      //      result = {ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}};
+      //      break;
+      //    }
+      //  }
+      //}
       // avoid spikes in the wrong direction
-      const pt1_pt2_d2 = (pt2.x - pt1.x)**2 + (pt2.y - pt1.y)**2;
-      const pt2_pt_d2 = (result.pt.x - pt2.x)**2 + (result.pt.y - pt2.y)**2;
-      if (pt2_pt_d2 > 100 * pt1_pt2_d2)
+      //const pt1_pt2_d2 = (pt2.x - pt1.x)**2 + (pt2.y - pt1.y)**2;
+      //const pt2_pt_d2 = (result.pt.x - pt2.x)**2 + (result.pt.y - pt2.y)**2;
+      //if (pt2_pt_d2 > 100 * pt1_pt2_d2)
       {
         let valid_prj_pts = [];
         for (let i = 0, n = closed_polygon.length - 1; i < n; i++)
@@ -318,15 +318,46 @@ class BaseProjector
     }
 
     let result = [];
-    let used_sub_polygons = [];
-    for (let i = 0, n = sub_polygons.length; i < n; i++)
+    sub_polygons.sort (function (a, b) { if (a.in_id < b.in_id) return -1;
+                                         else if (a.in_id > b.in_id) return 1;
+                                         else return a.in_u - b.in_u;});
+    let used_ids = [];
+    function getAncestor (sub_polygon)
     {
-      if (used_sub_polygons.indexOf (i) < 0)
+      let ancestors = sub_polygons.map (function (a) {return a.in_id < sub_polygon.out_id || (a.in_id == sub_polygon.out_id && a.in_u < sub_polygon.out_u);});
+      let ancestor = ancestors.lastIndexOf (true);
+      if (ancestor == -1)
+        ancestor = sub_polygons.length - 1;
+      if (used_ids.indexOf (ancestor) > -1)
+        return;
+      used_ids.push (ancestor);
+      getAncestor (sub_polygons[ancestor]);
+    }
+    console.log ("a", sub_polygons.length);
+    while (sub_polygons.length > 0)
+    {
+      used_ids = [0];
+      getAncestor (sub_polygons[0]);
+      console.log ("b", sub_polygons.length, used_ids);
+      let pts = sub_polygons[0].pts;
+      for (let i = 1, n = used_ids.length; i < n; i++)
       {
-        result.push (sub_polygons[i].pts);
-        let pp_dists = sub_polygons.map (function (a) { return a.in_id - sub_polygons[i].out_id});
+        for (let j = 0, nj = sub_polygons[used_ids[i-1]].out_id - sub_polygons[used_ids[i]].in_id; j < nj; j++)
+        {
+          console.log ("j", j);
+          pts.push (this.passpartout_polygon[sub_polygons[used_ids[i-1]].out_id - j]);
+        }
+        pts = pts.concat (sub_polygons[used_ids[i]].pts);
       }
-      used_sub_polygons.push (i);
+      result.push (pts);
+      used_ids.sort (function (a, b) {return b - a;});
+      console.log ("d", used_ids);
+      for (let i = 0, n = used_ids.length; i < n; i++)
+      {
+        console.log ("e", i, used_ids[i], sub_polygons.length);
+        sub_polygons.splice (used_ids[i], 1);
+      }
+      console.log ("c", sub_polygons.length);
     }
 
     return result;
