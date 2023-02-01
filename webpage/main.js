@@ -251,16 +251,20 @@ class BaseProjector
   drawPixelMap(context, image_data)
   {
     let interp_data = new ImageData(this.draw_width, this.draw_width / this.side_ratio);
-    let fx = image_data.width / interp_data.width;
-    let fy = image_data.height / interp_data.height;
+    let fx = image_data.width / 2.0 / Math.PI;
+    let fy = image_data.height / Math.PI;
     for (let y = 0, yn = interp_data.height; y < yn; y++)
     {
       let yo = y * interp_data.width * 4;
-      let yi = parseInt(y * fy) * image_data.width * 4;
       for (let x = 0, xn = interp_data.width; x < xn; x++)
       {
+        let pt_ab = projector.backProjectPoint({x: x + projector.offset.x, y: y + projector.offset.y});
+        let pt_xyz = ab2xyz(pt_ab);
+        pt_xyz = map_data1.transformator.transformPoint(pt_xyz);
+        pt_ab = xyz2ab(pt_xyz);
         let xo = x * 4;
-        let xi = parseInt (x * fx) * 4;
+        let xi = parseInt((pt_ab.a + Math.PI) * fx) * 4;
+        let yi = parseInt((Math.PI / 2.0 - pt_ab.b) * fy) * image_data.width * 4;
         for (let c = 0; c < 4; c++)
           interp_data.data[yo + xo + c] = image_data.data[yi + xi + c];
       }
