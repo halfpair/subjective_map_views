@@ -48,10 +48,10 @@ function loadPixelData(src_url, data)
 
 function json2MapData (json_data, data)
 {
-  //for (const data_set of json_data)
+  for (const data_set of json_data)
   {
     let point_set = [];
-    for (const element of json_data[17]) //data_set)
+    for (const element of data_set)
     {
       point_set.push (ab2xyz ({a: element[0] * Math.PI / 180.0, b: element[1] * Math.PI / 180.0}));
     }
@@ -604,8 +604,8 @@ function MouseTracker ()
         switch (this.button)
         {
           case 0:
-            map_data1.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
-            map_data2.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+            map_data1.transformator.rot_mat = matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a));
+            map_data2.transformator.rot_mat = matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a));
             pixel_data.transformator.rot_mat = matMulMat(this.rot_mat, matMulMat(getRotMatY (this.down_pos.a - cur_pos.a), getRotMatX (cur_pos.b - this.down_pos.b)));
             break;
           case 1:
@@ -709,26 +709,9 @@ function drawArea (context, polygon, transformator)
   }
 }
 
-function drawPixelMap()
-{
-  if (pixel_data.loaded)
-  {
-    let frame = document.getElementById("frame");
-    let map = document.getElementById("map");
-    map.width = frame.clientWidth;
-    map.height = frame.clientHeight;
-    projector.setSize(map.width, map.height);
-    let context = map.getContext("2d");
-    projector.drawPassepartout(context);
-    projector.drawPixelMap(context, pixel_data.data);
-  }
-}
-
 function drawPolygons ()
 {
-  drawPixelMap();
-  return;
-  if (map_data1.loaded && map_data2.loaded && city_data.loaded)
+  if (map_data1.loaded && map_data2.loaded && city_data.loaded && pixel_data.loaded)
   {
     let frame = document.getElementById ("frame");
     let map = document.getElementById ("map");
@@ -737,8 +720,9 @@ function drawPolygons ()
     projector.setSize (map.width, map.height);
     let context = map.getContext ("2d");
     projector.drawPassepartout (context);
+    projector.drawPixelMap(context, pixel_data.data);
     context.lineWidth = 1;
-    //context.strokeStyle = "#CCCCCC";
+    context.strokeStyle = "#CCCCCC";
     //context.fillStyle = "rgba(0,128,0,0.5)";
     //context.beginPath ();
     //for (const polygon of map_data2.polygons)
@@ -748,13 +732,13 @@ function drawPolygons ()
     //context.fill ();
     //context.stroke ();
     context.strokeStyle = "#CCCCCC";
-    context.fillStyle = "rgba(128,0,0,0.5)";
+    //context.fillStyle = "rgba(128,0,0,0.5)";
     context.beginPath ();
     for (const polygon of map_data1.polygons)
     {
-      drawArea (context, polygon, map_data1.transformator);
+      drawPolygon(context, polygon, map_data1.transformator);
     }
-    context.fill ();
+    //context.fill ();
     context.stroke ();
     context.strokeStyle = "red";
     context.beginPath ();
