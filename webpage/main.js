@@ -188,6 +188,7 @@ class PixelData
   {
     this.loaded = false;
     this.data = null;
+    this.transformator = new Transformator();
   }
 }
 
@@ -260,7 +261,7 @@ class BaseProjector
       {
         let pt_ab = projector.backProjectPoint({x: x + projector.offset.x, y: y + projector.offset.y});
         let pt_xyz = ab2xyz(pt_ab);
-        pt_xyz = map_data1.transformator.transformPoint(pt_xyz);
+        pt_xyz = pixel_data.transformator.transformPoint(pt_xyz);
         pt_ab = xyz2ab(pt_xyz);
         let xo = x * 4;
         let xi = parseInt((pt_ab.a + Math.PI) * fx) * 4;
@@ -583,7 +584,8 @@ function MouseTracker ()
       switch (this.button)
       {
         case 0: // left mouse button
-          this.rot_mat = map_data1.transformator.rot_mat;
+          //this.rot_mat = map_data1.transformator.rot_mat;
+          this.rot_mat = pixel_data.transformator.rot_mat;
           break;
         case 1: // middle mouse button
           this.rot_mat = map_data2.transformator.rot_mat;
@@ -604,6 +606,7 @@ function MouseTracker ()
           case 0:
             map_data1.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
             map_data2.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
+            pixel_data.transformator.rot_mat = matMulMat(this.rot_mat, matMulMat(getRotMatY (this.down_pos.a - cur_pos.a), getRotMatX (cur_pos.b - this.down_pos.b)));
             break;
           case 1:
             map_data2.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
@@ -621,6 +624,7 @@ function MouseTracker ()
     {
       map_data1.transformator.rot_mat = matMulMat (map_data1.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
       map_data2.transformator.rot_mat = matMulMat (map_data2.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
+      pixel_data.transformator.rot_mat = matMulMat(pixel_data.transformator.rot_mat, getRotMatZ(-a * Math.PI / 20.0));
     }
     else
     {
