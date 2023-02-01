@@ -28,6 +28,24 @@ function loadJsonData (src_url, converter, data)
   request.send (null);
 }
 
+function loadPixelData(src_url, data)
+{
+  const img = new Image();
+  img.src = src_url;
+  img.addEventListener("load",
+    function()
+    {
+      const load_canvas = document.createElement("canvas");
+      load_canvas.width = img.width;
+      load_canvas.height = img.height;
+      const load_context = load_canvas.getContext("2d");
+      load_context.drawImage(img, 0, 0);
+      data.data = load_context.getImageData(0,0, img.width, img.height);
+      data.loaded = true;
+      resize_handler.catchResize (null);
+    });
+}
+
 function json2MapData (json_data, data)
 {
   //for (const data_set of json_data)
@@ -164,6 +182,17 @@ class MapData
 var map_data1 = new MapData ();
 var map_data2 = new MapData ();
 
+class PixelData
+{
+  constructor()
+  {
+    this.loaded = false;
+    this.data = null;
+  }
+}
+
+var pixel_data = new PixelData();
+
 class BaseProjector
 {
   name = "";
@@ -174,7 +203,7 @@ class BaseProjector
   height = 64;
   passpartout_polygon = [];
   frame_color = '#101010';
-  sea_color = '#8888FF'
+  background_color = '#FFFFFF'
 
   constructor () {}
 
@@ -211,12 +240,32 @@ class BaseProjector
   {
     context.fillStyle = this.frame_color;
     context.fillRect (0, 0, this.width, this.height);
-    context.fillStyle = this.sea_color;
+    context.fillStyle = this.background_color;
     context.beginPath ();
     context.moveTo (this.passpartout_polygon[0].x, this.passpartout_polygon[0].y);
     for (let i = 1, n = this.passpartout_polygon.length; i < n; i++)
       context.lineTo (this.passpartout_polygon[i].x, this.passpartout_polygon[i].y);
     context.fill ();
+  }
+
+  drawPixelMap(context, image_data)
+  {
+    let interp_data = new ImageData(this.draw_width, this.draw_width / this.side_ratio);
+    let fx = image_data.width / interp_data.width;
+    let fy = image_data.height / interp_data.height;
+    for (let y = 0, yn = interp_data.height; y < yn; y++)
+    {
+      let yo = y * interp_data.width * 4;
+      let yi = parseInt(y * fy) * image_data.width * 4;
+      for (let x = 0, xn = interp_data.width; x < xn; x++)
+      {
+        let xo = x * 4;
+        let xi = parseInt (x * fx) * 4;
+        for (let c = 0; c < 4; c++)
+          interp_data.data[yo + xo + c] = image_data.data[yi + xi + c];
+      }
+    }
+    context.putImageData(interp_data, this.offset.x, this.offset.y);
   }
 
   suppressLine (from, to)
@@ -415,7 +464,7 @@ class OrthographicProjector extends BaseProjector
   {
     context.fillStyle = this.frame_color;
     context.fillRect (0, 0, this.width, this.height);
-    context.fillStyle = this.sea_color;
+    context.fillStyle = this.background_color;
     context.beginPath ();
     context.arc (this.width / 2.0, this.height / 2.0, this.draw_width / 2.0, 0, Math.PI * 2.0, true);
     context.fill ();
@@ -652,8 +701,25 @@ function drawArea (context, polygon, transformator)
   }
 }
 
+function drawPixelMap()
+{
+  if (pixel_data.loaded)
+  {
+    let frame = document.getElementById("frame");
+    let map = document.getElementById("map");
+    map.width = frame.clientWidth;
+    map.height = frame.clientHeight;
+    projector.setSize(map.width, map.height);
+    let context = map.getContext("2d");
+    projector.drawPassepartout(context);
+    projector.drawPixelMap(context, pixel_data.data);
+  }
+}
+
 function drawPolygons ()
 {
+  drawPixelMap();
+  return;
   if (map_data1.loaded && map_data2.loaded && city_data.loaded)
   {
     let frame = document.getElementById ("frame");
@@ -696,6 +762,7 @@ window.onload = function ()
 {
   loadJsonData ("./ne_110m_countries_red.json", json2MapData, map_data1);
   loadJsonData ("./cities_red.json", json2CityData, city_data);
+  loadPixelData("./map_small.jpg", pixel_data);
   let frame = document.getElementById ("frame");
   frame.onmousedown = mouse_tracker.catchDown;
   frame.onmouseup = mouse_tracker.catchUp;
