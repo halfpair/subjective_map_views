@@ -203,8 +203,9 @@ class BaseProjector
   width = 128;
   height = 64;
   passpartout_polygon = [];
+  speedup_level = 1;
   frame_color = '#101010';
-  background_color = '#FFFFFF'
+  background_color = '#FFFFFF';
 
   constructor () {}
 
@@ -249,15 +250,26 @@ class BaseProjector
     context.fill ();
   }
 
+  setSpeedupLevel(level)
+  {
+    let speedup_level = parseInt(level);
+    if (speedup_level < 1)
+      this.speedup_level = 1;
+    else if (speedup_level > 4)
+      this.speedup_level = 4;
+    else
+      this.speedup_level = speedup_level;
+  }
+
   drawPixelMap(context, image_data)
   {
     let interp_data = new ImageData(this.draw_width, this.draw_width / this.side_ratio);
     let fx = image_data.width / 2.0 / Math.PI;
     let fy = image_data.height / Math.PI;
-    for (let y = 0, yn = interp_data.height; y < yn; y++)
+    for (let y = 0, yn = interp_data.height; y < yn; y=y+this.speedup_level)
     {
       let yo = y * interp_data.width * 4;
-      for (let x = 0, xn = interp_data.width; x < xn; x++)
+      for (let x = 0, xn = interp_data.width; x < xn; x=x+this.speedup_level)
       {
         let pt_ab = projector.backProjectPoint({x: x + projector.offset.x, y: y + projector.offset.y});
         let pt_xyz = ab2xyz(pt_ab);
@@ -267,7 +279,12 @@ class BaseProjector
         let xi = parseInt((pt_ab.a + Math.PI) * fx) * 4;
         let yi = parseInt((Math.PI / 2.0 - pt_ab.b) * fy) * image_data.width * 4;
         for (let c = 0; c < 4; c++)
-          interp_data.data[yo + xo + c] = image_data.data[yi + xi + c];
+        {
+          let v = image_data.data[yi + xi + c];
+          for (let ly = 0; ly < this.speedup_level; ly++)
+            for (let lx = 0; lx < this.speedup_level; lx++)
+              interp_data.data[yo + interp_data.width * 4 * ly + xo + c + 4 * lx] = v;
+        }
       }
     }
     context.putImageData(interp_data, this.offset.x, this.offset.y);
@@ -387,31 +404,25 @@ class BaseProjector
       used_ids.push (ancestor);
       getAncestor (sub_polygons[ancestor]);
     }
-    console.log ("a", sub_polygons.length);
     while (sub_polygons.length > 0)
     {
       used_ids = [0];
       getAncestor (sub_polygons[0]);
-      console.log ("b", sub_polygons.length, used_ids);
       let pts = sub_polygons[0].pts;
       for (let i = 1, n = used_ids.length; i < n; i++)
       {
         for (let j = 0, nj = sub_polygons[used_ids[i-1]].out_id - sub_polygons[used_ids[i]].in_id; j < nj; j++)
         {
-          console.log ("j", j);
           pts.push (this.passpartout_polygon[sub_polygons[used_ids[i-1]].out_id - j]);
         }
         pts = pts.concat (sub_polygons[used_ids[i]].pts);
       }
       result.push (pts);
       used_ids.sort (function (a, b) {return b - a;});
-      console.log ("d", used_ids);
       for (let i = 0, n = used_ids.length; i < n; i++)
       {
-        console.log ("e", i, used_ids[i], sub_polygons.length);
         sub_polygons.splice (used_ids[i], 1);
       }
-      console.log ("c", sub_polygons.length);
     }
 
     return result;
@@ -612,7 +623,10 @@ function MouseTracker ()
             map_data2.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
             break;
         }
+        let t0 = performance.now();
         drawPolygons ();
+        if (performance.now() - t0 > 200)
+          projector.setSpeedupLevel(projector.speedup_level + 1);
       }
     }
   }
@@ -645,6 +659,8 @@ function MouseTracker ()
     map_data2.transformator.rot_mat = I;
     this.down = false;
     this.button = null;
+    projector.setSpeedupLevel(1);
+    drawPolygons();
   }
   this.catchDblClick = function (event) {
     projector_counter += 1;
@@ -754,7 +770,7 @@ window.onload = function ()
 {
   loadJsonData ("./ne_110m_countries_red.json", json2MapData, map_data1);
   loadJsonData ("./cities_red.json", json2CityData, city_data);
-  loadPixelData("./map_small.jpg", pixel_data);
+  loadPixelData("./map_color.jpg", pixel_data);
   let frame = document.getElementById ("frame");
   frame.onmousedown = mouse_tracker.catchDown;
   frame.onmouseup = mouse_tracker.catchUp;
