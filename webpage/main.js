@@ -581,69 +581,89 @@ var projector = projectors[projector_counter];
 function MouseTracker ()
 {
   this.down = false;
-  this.button = null;
+  this.rotation = false;
   this.down_pos = {x: 0, y: 0};
-  this.up_pos = {x: 0, y: 0};
+  this.touch_pos2 = {x: 0, y: 0};
   this.rot_mat = I;
-  this.catchDown = function (event) {
+
+  this.catchDown = function (event)
+  {
     let cur_pos = projector.backProjectPoint ({x: event.layerX, y: event.layerY});
-    if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
+    if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b) && (event.button === 0 || event.button === undefined))
     {
       this.down = true;
-      this.button = event.button; // store it here as onmousemove may not provide it
-      this.down_pos = cur_pos;
-      switch (this.button)
+      this.rot_mat = pixel_data.transformator.rot_mat;
+      let touch_events = event.touches;
+      if (touch_events !== undefined && touch_events.length == 2)
       {
-        case 0: // left mouse button
-          //this.rot_mat = map_data1.transformator.rot_mat;
-          this.rot_mat = pixel_data.transformator.rot_mat;
-          break;
-        case 1: // middle mouse button
-          this.rot_mat = map_data2.transformator.rot_mat;
-          break;
+        this.rotation = true;
+        this.down_pos = touch_events.item(0);
+        this.touch_pos2 = touch_events.item(1);
+      }
+      else
+      {
+        this.down_pos = cur_pos;
       }
     }
   }
-  this.catchMove = function (event) {
+
+  this.catchMove = function (event)
+  {
     if (this.down)
     {
-      let cur_pos = projector.backProjectPoint ({x: event.layerX, y: event.layerY});
-      event.cancelBubble = true;
-      event.returnValue = false;
-      if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
+      if (this.rotation)
       {
-        switch (this.button)
+        let touch_events = event.touches;
+        event.cancelBubble = true;
+        event.returnValue = false;
+        if (touch_events !== undefined && touch_events.length == 2)
         {
-          case 0:
-            map_data1.transformator.rot_mat = matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a));
-            map_data2.transformator.rot_mat = matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a));
-            pixel_data.transformator.rot_mat = matMulMat(this.rot_mat, matMulMat(getRotMatY (this.down_pos.a - cur_pos.a), getRotMatX (cur_pos.b - this.down_pos.b)));
-            break;
-          case 1:
-            map_data2.transformator.rot_mat = matMulMat (this.rot_mat, matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a)));
-            break;
+          let down_pos_ = {}, touch_pos2_ = {};
+          if (touch_events.item(0).identifier === this.down_pos.identifier)
+          {
+            down_pos_ = touch_events.item(0);
+            touch_pos2_ = touch_events.item(1);
+          }
+          else
+          {
+            down_pos_ = touch_events.item(1);
+            touch_pos2_ = touch_events.item(0);
+          }
+          let v1 = {x: this.touch_pos2.clientX - this.down_pos.clientX, y: this.touch_pos2.clientY - this.down_pos.clientY};
+          let v2 = {x: touch_pos2_.clientX - down_pos_.clientX, y: touch_pos2_.clientY - down_pos_.clientY};
+          let angle = Math.acos((v1.x * v2.x + v1.y * v2.y) / (Math.sqrt(v1.x**2 + v1.y**2) * Math.sqrt(v2.x**2 + v2.y**2)));
+          angle *= v1.x * v2.y - v1.y * v2.x < 0.0 ? -1.0 : 1.0;
+          map_data1.transformator.rot_mat = getRotMatZ(-angle);
+          map_data2.transformator.rot_mat = getRotMatZ(-angle);
+          pixel_data.transformator.rot_mat = matMulMat(this.rot_mat, getRotMatZ(angle));
         }
-        let t0 = performance.now();
-        drawPolygons ();
-        if (performance.now() - t0 > 200)
-          projector.setSpeedupLevel(projector.speedup_level + 1);
       }
+      else
+      {
+        let cur_pos = projector.backProjectPoint ({x: event.layerX, y: event.layerY});
+        event.cancelBubble = true;
+        event.returnValue = false;
+        if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
+        {
+          map_data1.transformator.rot_mat = matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a));
+          map_data2.transformator.rot_mat = matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a));
+          pixel_data.transformator.rot_mat = matMulMat(this.rot_mat, matMulMat(getRotMatY (this.down_pos.a - cur_pos.a), getRotMatX (cur_pos.b - this.down_pos.b)));
+        }
+      }
+      let t0 = performance.now();
+      drawPolygons ();
+      if (performance.now() - t0 > 200)
+        projector.setSpeedupLevel(projector.speedup_level + 1);
     }
   }
+
   this.catchWheel = function (event) {
     event.cancelBubble = true;
     event.returnValue = false;
     const a = event.deltaY > 0 ? 1.0 : -1.0;
-    if (a > 0)
-    {
-      map_data1.transformator.rot_mat = matMulMat (map_data1.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
-      map_data2.transformator.rot_mat = matMulMat (map_data2.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
-      pixel_data.transformator.rot_mat = matMulMat(pixel_data.transformator.rot_mat, getRotMatZ(-a * Math.PI / 20.0));
-    }
-    else
-    {
-      map_data2.transformator.rot_mat = matMulMat (map_data2.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
-    }
+    map_data1.transformator.rot_mat = matMulMat (map_data1.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
+    map_data2.transformator.rot_mat = matMulMat (map_data2.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
+    pixel_data.transformator.rot_mat = matMulMat(pixel_data.transformator.rot_mat, getRotMatZ(-a * Math.PI / 20.0));
     map_data1.transformator.transformMapData (map_data1);
     map_data2.transformator.transformMapData (map_data2);
     map_data1.transformator.transformMapData (city_data);
@@ -651,14 +671,16 @@ function MouseTracker ()
     map_data2.transformator.rot_mat = I;
     drawPolygons ();
   }
-  this.catchUp = function (event) {
+
+  this.catchUp = function (event)
+  {
     map_data1.transformator.transformMapData (map_data1);
     map_data2.transformator.transformMapData (map_data2);
     map_data1.transformator.transformMapData (city_data);
     map_data1.transformator.rot_mat = I;
     map_data2.transformator.rot_mat = I;
     this.down = false;
-    this.button = null;
+    this.rotation = false;
     projector.setSpeedupLevel(1);
     drawPolygons();
   }
@@ -783,4 +805,10 @@ window.onload = function ()
   frame.ontouchcancel = mouse_tracker.catchUp;
   frame.ontouchmove = mouse_tracker.catchMove;
   window.onresize = resize_handler.catchResize;
+}
+
+function log(msg)
+{
+  const container = document.getElementById("log");
+  container.textContent = `${msg}\n${container.textContent}`;
 }
