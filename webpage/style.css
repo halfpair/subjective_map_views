@@ -22,3 +22,26 @@ body {
     height: 100%;
     background-color: transparent;
 }
+
+select {
+    margin: 4px;
+    border: 1px solid #fff;
+    border-radius: 4px;
+    background-color: transparent;
+    color: #fff;
+}
+
+#selector_pixel_map {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#log {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    height: 200px;
+    width: 400px;
+    overflow: scroll;
+}

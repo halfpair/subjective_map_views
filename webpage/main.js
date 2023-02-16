@@ -30,6 +30,8 @@ function loadJsonData (src_url, converter, data)
 
 function loadPixelData(src_url, data)
 {
+  data.loaded = false;
+  data.data = null;
   const img = new Image();
   img.src = src_url;
   img.addEventListener("load",
@@ -788,6 +790,16 @@ function drawPolygons ()
   }
 }
 
+function changePixelData(event)
+{
+  if (event.target.value == "base")
+    loadPixelData("./map_base.jpg", pixel_data);
+  else if (event.target.value == "color")
+    loadPixelData("./map_color.jpg", pixel_data);
+  else if (event.target.value == "shape")
+    loadPixelData("./map_shape.png", pixel_data);
+}
+
 window.onload = function ()
 {
   loadJsonData ("./ne_110m_countries_red.json", json2MapData, map_data1);
@@ -805,6 +817,8 @@ window.onload = function ()
   frame.ontouchcancel = mouse_tracker.catchUp;
   frame.ontouchmove = mouse_tracker.catchMove;
   window.onresize = resize_handler.catchResize;
+  let selector_pixel_map = document.getElementById("selector_pixel_map");
+  selector_pixel_map.onchange = changePixelData;
 }
 
 function log(msg)
