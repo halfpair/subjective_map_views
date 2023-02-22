@@ -28,24 +28,37 @@ function loadJsonData (src_url, converter, data)
   request.send (null);
 }
 
-function loadPixelData(src_url, data)
+function loadImageData(image_data)
 {
-  data.loaded = false;
-  data.data = null;
-  const img = new Image();
-  img.src = src_url;
-  img.addEventListener("load",
-    function()
-    {
-      const load_canvas = document.createElement("canvas");
-      load_canvas.width = img.width;
-      load_canvas.height = img.height;
-      const load_context = load_canvas.getContext("2d");
-      load_context.drawImage(img, 0, 0);
-      data.data = load_context.getImageData(0,0, img.width, img.height);
-      data.loaded = true;
-      resize_handler.catchResize (null);
-    });
+  image_data.loaded = false;
+  image_data.data = null;
+  if (image_data.src.length > 0)
+  {
+    const img = new Image();
+    img.src = image_data.src;
+    img.addEventListener("load",
+      function()
+      {
+        const load_canvas = document.createElement("canvas");
+        load_canvas.width = img.width;
+        load_canvas.height = img.height;
+        const load_context = load_canvas.getContext("2d");
+        load_context.drawImage(img, 0, 0);
+        image_data.data = load_context.getImageData(0,0, img.width, img.height);
+        image_data.loaded = true;
+        resize_handler.catchResize(null);
+      });
+  }
+  else
+  {
+    image_data.loaded = true;
+  }
+  let select_image = document.getElementById("select_image");
+  let option = document.createElement("option");
+  option.value = image_data.key;
+  option.textContent = image_data.name;
+  option.selected = image_data.preselected;
+  select_image.appendChild(option);
 }
 
 function json2MapData (json_data, data)
@@ -59,8 +72,6 @@ function json2MapData (json_data, data)
     }
     data.polygons.push (point_set);
   }
-  map_data2.polygons = structuredClone (data.polygons);
-  map_data2.loaded = true;
 }
 
 function CityData ()
@@ -108,6 +119,13 @@ const I = [[1.0, 0.0, 0.0],
            [0.0, 1.0, 0.0],
            [0.0, 0.0, 1.0]];
 
+function matT(mat)
+{
+  return [[mat[0][0], mat[1][0], mat[2][0]],
+          [mat[0][1], mat[1][1], mat[2][1]],
+          [mat[0][2], mat[1][2], mat[2][2]]];
+}
+
 function matMulPt (mat, pt_xyz)
 {
   return {x: pt_xyz.x * mat[0][0] + pt_xyz.y * mat[0][1] + pt_xyz.z * mat[0][2],
@@ -151,25 +169,22 @@ function getRotMatZ (a)
           [0.0, 0.0, 1.0]];
 }
 
-function Transformator ()
+class Transformator
 {
-  this.rot_mat = I;
-  this.rotate = function (rx, ry, rz) {
-    this.rot_mat = matMulMat (this.rot_mat, matMulMat (matMulMat (getRotMatX (rx), getRotMatY (ry)), getRotMatZ (rz)));
-  }
-  this.transformPoint = function (pt_xyz) {
+  rot_mat = I;
+
+  transformPoint(pt_xyz)
+  {
     return matMulPt (this.rot_mat, pt_xyz);
   }
-  this.transformMapData = function (md) {
-    for (let i = 0; i < md.polygons.length; i++)
-    {
-      for (let j = 0; j < md.polygons[i].length; j++)
-      {
-        md.polygons[i][j] = this.transformPoint (md.polygons[i][j]);
-      }
-    }
+
+  transformPointInverse(pt_xyz)
+  {
+    return matMulPt(matT(this.rot_mat), pt_xyz);
   }
 }
+
+var transformator = new Transformator();
 
 class MapData
 {
@@ -177,41 +192,33 @@ class MapData
   {
     this.loaded = false;
     this.polygons = [];
-    this.transformator = new Transformator ();
   }
 }
 
-var map_data1 = new MapData ();
-var map_data2 = new MapData ();
+var map_data = new MapData ();
 
-class PixelData
-{
-  constructor()
-  {
-    this.loaded = false;
-    this.data = null;
-    this.transformator = new Transformator();
-  }
-}
-
-var pixel_data = new PixelData();
+var image_datas = [{loaded: false, data: null, key: "none", name: "None", src: "", preselected: false},
+                   {loaded: false, data: null, key: "base", name: "Base", src: "./map_base.jpg", preselected: false},
+                   {loaded: false, data: null, key: "color", name: "Color", src: "./map_color.jpg", preselected: true},
+                   {loaded: false, data: null, key: "shape", name: "Shape", src: "./map_shape.png", preselected: false}];
 
 class BaseProjector
 {
+  key = "";
   name = "";
+  preselected = false;
   side_ratio = 1.0;
   draw_width = 128;
   offset = {x: 0, y: 0};
   width = 128;
   height = 64;
-  passpartout_polygon = [];
   speedup_level = 1;
-  frame_color = '#101010';
-  background_color = '#FFFFFF';
+  frame_color = "#101010";
+  background_color = "#FFFFFF";
 
-  constructor () {}
+  constructor() {}
 
-  setSize (width, height)
+  setSize(width, height)
   {
     this.width = width;
     this.height = height;
@@ -228,28 +235,24 @@ class BaseProjector
                                 {x: this.offset.x, y: this.offset.y}];
   }
 
-  projectPoint (pt_ab)
+  projectPoint(pt_ab)
   {
     return {x: this.draw_width * (pt_ab.a / Math.PI + 1.0) / 2.0 + this.offset.x,
             y: this.draw_width / this.side_ratio * (0.5 - pt_ab.b / Math.PI) + this.offset.y};
   }
 
-  backProjectPoint (pt_xy)
+  backProjectPoint(pt_xy)
   {
     return {a: ((pt_xy.x - this.offset.x) * 2.0 / this.draw_width - 1.0) * Math.PI,
             b: (0.5 - (pt_xy.y - this.offset.y) * this.side_ratio / this.draw_width) * Math.PI};
   }
 
-  drawPassepartout (context)
+  drawPassepartout(context)
   {
     context.fillStyle = this.frame_color;
-    context.fillRect (0, 0, this.width, this.height);
+    context.fillRect(0, 0, this.width, this.height);
     context.fillStyle = this.background_color;
-    context.beginPath ();
-    context.moveTo (this.passpartout_polygon[0].x, this.passpartout_polygon[0].y);
-    for (let i = 1, n = this.passpartout_polygon.length; i < n; i++)
-      context.lineTo (this.passpartout_polygon[i].x, this.passpartout_polygon[i].y);
-    context.fill ();
+    context.fillRect(this.offset.x, this.offset.y, this.draw_width, this.draw_width / this.side_ratio);
   }
 
   setSpeedupLevel(level)
@@ -265,24 +268,31 @@ class BaseProjector
 
   drawPixelMap(context, image_data)
   {
+    if (image_data === null)
+      return;
     let interp_data = new ImageData(this.draw_width, this.draw_width / this.side_ratio);
     let fx = image_data.width / 2.0 / Math.PI;
     let fy = image_data.height / Math.PI;
-    for (let y = 0, yn = interp_data.height; y < yn; y=y+this.speedup_level)
+    for (let y = 0, yn = interp_data.height; y < yn; y += this.speedup_level)
     {
       let yo = y * interp_data.width * 4;
-      for (let x = 0, xn = interp_data.width; x < xn; x=x+this.speedup_level)
+      for (let x = 0, xn = interp_data.width; x < xn; x += this.speedup_level)
       {
-        let pt_ab = projector.backProjectPoint({x: x + projector.offset.x, y: y + projector.offset.y});
-        let pt_xyz = ab2xyz(pt_ab);
-        pt_xyz = pixel_data.transformator.transformPoint(pt_xyz);
-        pt_ab = xyz2ab(pt_xyz);
         let xo = x * 4;
-        let xi = parseInt((pt_ab.a + Math.PI) * fx) * 4;
-        let yi = parseInt((Math.PI / 2.0 - pt_ab.b) * fy) * image_data.width * 4;
+        let pt_ab = projector.backProjectPoint({x: x + projector.offset.x, y: y + projector.offset.y});
+        let transp = isNaN(pt_ab.a) || isNaN(pt_ab.b);
+        let xi = 0, yi = 0;
+        if (!transp)
+        {
+          let pt_xyz = ab2xyz(pt_ab);
+          pt_xyz = transformator.transformPointInverse(pt_xyz);
+          pt_ab = xyz2ab(pt_xyz);
+          xi = parseInt((pt_ab.a + Math.PI) * fx) * 4;
+          yi = parseInt((Math.PI / 2.0 - pt_ab.b) * fy) * image_data.width * 4;
+        }
         for (let c = 0; c < 4; c++)
         {
-          let v = image_data.data[yi + xi + c];
+          let v = transp && c < 3 ? parseInt(projector.frame_color.substr(c*2+1, 2), 16) : image_data.data[yi + xi + c];
           for (let ly = 0; ly < this.speedup_level; ly++)
             for (let lx = 0; lx < this.speedup_level; lx++)
               interp_data.data[yo + interp_data.width * 4 * ly + xo + c + 4 * lx] = v;
@@ -292,235 +302,106 @@ class BaseProjector
     context.putImageData(interp_data, this.offset.x, this.offset.y);
   }
 
-  suppressLine (from, to)
+  suppressLine(from, to)
   {
     return false;
-  }
-
-  getCuttedPolygons (pts_xy, suppressed_lines)
-  {
-    if (suppressed_lines.length == pts_xy.length - 1)  // nothing to render
-      return [];
-    
-    if (suppressed_lines.length == 0)  // nothing to cut
-      return [pts_xy];
-    
-
-    function getClosedPolygonCutPointFromInside (pt1, pt2, closed_polygon)
-    {
-      // for line intersection computation see https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
-      let result = {ppp_id: -1, u: 0.0, pt: {x: 0.0, y: 0.0}};
-      //for (let i = 0, n = closed_polygon.length - 1; i < n; i++)
-      //{
-      //  let pt3 = closed_polygon[i];
-      //  let pt4 = closed_polygon[i+1];
-      //  let divisor = (pt1.x - pt2.x) * (pt3.y - pt4.y) - (pt1.y - pt2.y) * (pt3.x - pt4.x);
-      //  if (Math.abs (divisor) > 1.e-12)
-      //  {
-      //    let t = ((pt1.x - pt3.x) * (pt3.y - pt4.y) - (pt1.y - pt3.y) * (pt3.x - pt4.x)) / divisor;
-      //    let u = ((pt1.x - pt3.x) * (pt1.y - pt2.y) - (pt1.y - pt3.y) * (pt1.x - pt2.x)) / divisor;
-      //    if (t >= 0.0 && u >= 0.0 && u <= 1.0)
-      //    {
-      //      result = {ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}};
-      //      break;
-      //    }
-      //  }
-      //}
-      // avoid spikes in the wrong direction
-      //const pt1_pt2_d2 = (pt2.x - pt1.x)**2 + (pt2.y - pt1.y)**2;
-      //const pt2_pt_d2 = (result.pt.x - pt2.x)**2 + (result.pt.y - pt2.y)**2;
-      //if (pt2_pt_d2 > 100 * pt1_pt2_d2)
-      {
-        let valid_prj_pts = [];
-        for (let i = 0, n = closed_polygon.length - 1; i < n; i++)
-        {
-          let pt3 = closed_polygon[i];
-          let pt4 = closed_polygon[i+1];
-          let f1 = pt3.x - pt4.x;
-          let f2 = pt4.y - pt3.y;
-          let divisor = f1**2 - (pt3.y - pt4.y) * f2;
-          if (Math.abs (divisor) > 1.e-12)
-          {
-            let u = ((pt3.x - pt2.x) * f1 - (pt3.y - pt2.y) * f2) / divisor;
-            if (u >= 0.0 && u <= 1.0)
-              valid_prj_pts.push ({ppp_id: i, u: u, pt: {x: pt3.x + u * (pt4.x - pt3.x), y: pt3.y + u * (pt4.y - pt3.y)}});
-          }
-        }
-        result = valid_prj_pts.sort (function (a, b) { return ((a.pt.x - pt2.x)**2 + (a.pt.y - pt2.y)**2) - ((b.pt.x - pt2.x)**2 + (b.pt.y - pt2.y)**2); })[0];
-      }
-      return result;  // should never happen
-    }
-
-    function handleSubPolygon (pts, closed_polygon)  // pts must have at least length 2
-    {
-      let sub_polygon = {}
-      sub_polygon.pts = pts;
-      let cut_pt = getClosedPolygonCutPointFromInside (sub_polygon.pts[1], sub_polygon.pts[0], closed_polygon);
-      sub_polygon.pts.unshift (cut_pt.pt);
-      sub_polygon.in_id = cut_pt.ppp_id;
-      sub_polygon.in_u = cut_pt.u;
-      const l = sub_polygon.pts.length;
-      cut_pt = getClosedPolygonCutPointFromInside (sub_polygon.pts[l-2], sub_polygon.pts[l-1], closed_polygon);
-      sub_polygon.pts.push (cut_pt.pt);
-      sub_polygon.out_id = cut_pt.ppp_id;
-      sub_polygon.out_u = cut_pt.u;
-      return sub_polygon;
-    }
-
-    let sub_polygons = [];
-    // handle all parts "inside"
-    let first = suppressed_lines[0] + 1;
-    for (let i = 1, n = suppressed_lines.length; i < n; i++)
-    {
-      const suppressed_line = suppressed_lines[i];
-      if (suppressed_line + 1 - first > 2)  // at least an angle
-        sub_polygons.push (handleSubPolygon (pts_xy.slice (first, suppressed_line + 1), this.passpartout_polygon));
-      first = suppressed_line + 1;
-    }
-    // handle "frame"-part especially
-    if (pts_xy.length - (suppressed_lines[suppressed_lines.length - 1] + 1 - suppressed_lines[0]) > 3)
-    {
-      const last = suppressed_lines[suppressed_lines.length - 1] + 1;
-      let render_pts = pts_xy.slice (last);
-      let render_pts2 = pts_xy.slice (0, suppressed_lines[0] + 1);
-      if (render_pts.length > render_pts2.length && render_pts2.length > 0)
-        render_pts.pop ();
-      else if (render_pts.length > 0)
-        render_pts2.shift ();
-      sub_polygons.push (handleSubPolygon (render_pts.concat (render_pts2), this.passpartout_polygon));
-    }
-
-    let result = [];
-    sub_polygons.sort (function (a, b) { if (a.in_id < b.in_id) return -1;
-                                         else if (a.in_id > b.in_id) return 1;
-                                         else return a.in_u - b.in_u;});
-    let used_ids = [];
-    function getAncestor (sub_polygon)
-    {
-      let ancestors = sub_polygons.map (function (a) {return a.in_id < sub_polygon.out_id || (a.in_id == sub_polygon.out_id && a.in_u < sub_polygon.out_u);});
-      let ancestor = ancestors.lastIndexOf (true);
-      if (ancestor == -1)
-        ancestor = sub_polygons.length - 1;
-      if (used_ids.indexOf (ancestor) > -1)
-        return;
-      used_ids.push (ancestor);
-      getAncestor (sub_polygons[ancestor]);
-    }
-    while (sub_polygons.length > 0)
-    {
-      used_ids = [0];
-      getAncestor (sub_polygons[0]);
-      let pts = sub_polygons[0].pts;
-      for (let i = 1, n = used_ids.length; i < n; i++)
-      {
-        for (let j = 0, nj = sub_polygons[used_ids[i-1]].out_id - sub_polygons[used_ids[i]].in_id; j < nj; j++)
-        {
-          pts.push (this.passpartout_polygon[sub_polygons[used_ids[i-1]].out_id - j]);
-        }
-        pts = pts.concat (sub_polygons[used_ids[i]].pts);
-      }
-      result.push (pts);
-      used_ids.sort (function (a, b) {return b - a;});
-      for (let i = 0, n = used_ids.length; i < n; i++)
-      {
-        sub_polygons.splice (used_ids[i], 1);
-      }
-    }
-
-    return result;
   }
 }
 
 class EquirectangularProjector extends BaseProjector
 {
-  constructor ()
+  constructor()
   {
-    super ();
+    super();
+    this.key = "equirect";
     this.name = "Equirectangular";
+    this.preselected = true;
     this.side_ratio = 2.0;
   }
 
-  projectPoint (pt_ab)
+  projectPoint(pt_ab)
   {
-    return super.projectPoint (pt_ab);
+    return super.projectPoint(pt_ab);
   }
 
-  backProjectPoint (pt_xy)
+  backProjectPoint(pt_xy)
   {
-    return super.backProjectPoint (pt_xy);
+    return super.backProjectPoint(pt_xy);
   }
 
-  suppressLine (from, to)
+  suppressLine(from, to)
   {
-    return Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
+    return Math.abs(to.a - from.a) > Math.PI || Math.abs(to.b - from.b) > Math.PI / 2.0;
   }
 }
 
 class OrthographicProjector extends BaseProjector
 {
-  constructor ()
+  constructor()
   {
-    super ();
+    super();
+    this.key = "ortho";
     this.name = "Orthographic";
     this.side_ratio = 1.0;
   }
 
-  projectPoint (pt_ab)
+  projectPoint(pt_ab)
   {
-    return {x: this.draw_width / 2.0 * (1.0 + Math.sin (pt_ab.a) * Math.cos (pt_ab.b)) + this.offset.x,
-            y: this.draw_width / 2.0 * (1.0 + Math.sin (-pt_ab.b)) + this.offset.y};
+    return {x: this.draw_width / 2.0 * (1.0 + Math.sin(pt_ab.a) * Math.cos(pt_ab.b)) + this.offset.x,
+            y: this.draw_width / 2.0 * (1.0 + Math.sin(-pt_ab.b)) + this.offset.y};
   }
 
-  backProjectPoint (pt_xy)
+  backProjectPoint(pt_xy)
   {
-    let b = -Math.asin (2.0 * (pt_xy.y - this.offset.y) / this.draw_width - 1.0);
-    return {a: Math.asin ((2.0 * (pt_xy.x - this.offset.x) / this.draw_width - 1.0) / Math.cos (b)),
+    let b = -Math.asin(2.0 * (pt_xy.y - this.offset.y) / this.draw_width - 1.0);
+    return {a: Math.asin((2.0 * (pt_xy.x - this.offset.x) / this.draw_width - 1.0) / Math.cos(b)),
             b: b};
   }
 
-  drawPassepartout (context)
+  drawPassepartout(context)
   {
     context.fillStyle = this.frame_color;
-    context.fillRect (0, 0, this.width, this.height);
+    context.fillRect(0, 0, this.width, this.height);
     context.fillStyle = this.background_color;
-    context.beginPath ();
-    context.arc (this.width / 2.0, this.height / 2.0, this.draw_width / 2.0, 0, Math.PI * 2.0, true);
-    context.fill ();
+    context.beginPath();
+    context.arc(this.width / 2.0, this.height / 2.0, this.draw_width / 2.0, 0, Math.PI * 2.0, true);
+    context.fill();
   }
 
-  suppressLine (from, to)
+  suppressLine(from, to)
   {
     let lim = Math.PI / 2.0;
-    return Math.abs (to.a) > lim || Math.abs (to.b) > lim || Math.abs (from.a) > lim || Math.abs (from.b) > lim;
+    return Math.abs(to.a) > lim || Math.abs(to.b) > lim || Math.abs(from.a) > lim || Math.abs(from.b) > lim;
   }
 }
 
 class MercatorProjector extends BaseProjector
 {
-  constructor ()
+  constructor()
   {
-    super ();
+    super();
+    this.key = "mercator";
     this.name = "Mercator";
     this.side_ratio = 1.0;
-    this.lat_limit = Math.asin (Math.tanh (Math.PI / this.side_ratio));
-    this.lat_prj_limit = Math.atanh (Math.sin (this.lat_limit));
+    this.lat_limit = Math.asin (Math.tanh(Math.PI / this.side_ratio));
+    this.lat_prj_limit = Math.atanh (Math.sin(this.lat_limit));
 }
 
-  projectPoint (pt_ab)
+  projectPoint(pt_ab)
   {
     return {x: this.draw_width * (pt_ab.a / Math.PI + 1.0) / 2.0 + this.offset.x,
-            y: this.draw_width / this.side_ratio * (1.0 - Math.atanh (Math.sin (pt_ab.b)) / this.lat_prj_limit) / 2.0 + this.offset.y};
+            y: this.draw_width / this.side_ratio * (1.0 - Math.atanh(Math.sin(pt_ab.b)) / this.lat_prj_limit) / 2.0 + this.offset.y};
   }
 
-  backProjectPoint (pt_xy)
+  backProjectPoint(pt_xy)
   {
     return {a: ((pt_xy.x - this.offset.x) * 2.0 / this.draw_width - 1.0) * Math.PI,
-            b: Math.asin (Math.tanh (this.lat_prj_limit * (1.0 - (pt_xy.y - this.offset.y) / this.draw_width * this.side_ratio * 2.0)))};
+            b: Math.asin(Math.tanh(this.lat_prj_limit * (1.0 - (pt_xy.y - this.offset.y) / this.draw_width * this.side_ratio * 2.0)))};
   }
 
-  suppressLine (from, to)
+  suppressLine(from, to)
   {
-    return Math.abs (to.b) > this.lat_limit || Math.abs (from.b) > this.lat_limit || Math.abs (to.a - from.a) > Math.PI || Math.abs (to.b - from.b) > Math.PI / 2.0;
+    return Math.abs(to.b) > this.lat_limit || Math.abs(from.b) > this.lat_limit || Math.abs(to.a - from.a) > Math.PI || Math.abs(to.b - from.b) > Math.PI / 2.0;
   }
 }
 
@@ -576,9 +457,8 @@ function CylindricProjector ()
   }
 }
 
-const projectors = [new EquirectangularProjector (), new OrthographicProjector (), new MercatorProjector ()]; //, new CylindricProjector];
-var projector_counter = 0;
-var projector = projectors[projector_counter];
+const projectors = [new EquirectangularProjector(), new OrthographicProjector(), new MercatorProjector()]; //, new CylindricProjector];
+var projector = projectors.filter(function(prj){return prj.preselected;})[0];
 
 function MouseTracker ()
 {
@@ -594,7 +474,7 @@ function MouseTracker ()
     if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b) && (event.button === 0 || event.button === undefined))
     {
       this.down = true;
-      this.rot_mat = pixel_data.transformator.rot_mat;
+      this.rot_mat = transformator.rot_mat;
       let touch_events = event.touches;
       if (touch_events !== undefined && touch_events.length == 2)
       {
@@ -635,9 +515,7 @@ function MouseTracker ()
           let v2 = {x: touch_pos2_.clientX - down_pos_.clientX, y: touch_pos2_.clientY - down_pos_.clientY};
           let angle = Math.acos((v1.x * v2.x + v1.y * v2.y) / (Math.sqrt(v1.x**2 + v1.y**2) * Math.sqrt(v2.x**2 + v2.y**2)));
           angle *= v1.x * v2.y - v1.y * v2.x < 0.0 ? -1.0 : 1.0;
-          map_data1.transformator.rot_mat = getRotMatZ(-angle);
-          map_data2.transformator.rot_mat = getRotMatZ(-angle);
-          pixel_data.transformator.rot_mat = matMulMat(this.rot_mat, getRotMatZ(angle));
+          transformator.rot_mat = matMulMat(getRotMatZ(-angle), this.rot_mat);
         }
       }
       else
@@ -647,9 +525,7 @@ function MouseTracker ()
         event.returnValue = false;
         if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
         {
-          map_data1.transformator.rot_mat = matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a));
-          map_data2.transformator.rot_mat = matMulMat (getRotMatX (this.down_pos.b - cur_pos.b), getRotMatY (cur_pos.a - this.down_pos.a));
-          pixel_data.transformator.rot_mat = matMulMat(this.rot_mat, matMulMat(getRotMatY (this.down_pos.a - cur_pos.a), getRotMatX (cur_pos.b - this.down_pos.b)));
+          transformator.rot_mat = matMulMat(matMulMat(getRotMatX(this.down_pos.b - cur_pos.b), getRotMatY(cur_pos.a - this.down_pos.a)), this.rot_mat);
         }
       }
       let t0 = performance.now();
@@ -663,33 +539,16 @@ function MouseTracker ()
     event.cancelBubble = true;
     event.returnValue = false;
     const a = event.deltaY > 0 ? 1.0 : -1.0;
-    map_data1.transformator.rot_mat = matMulMat (map_data1.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
-    map_data2.transformator.rot_mat = matMulMat (map_data2.transformator.rot_mat, getRotMatZ (a * Math.PI / 20.0));
-    pixel_data.transformator.rot_mat = matMulMat(pixel_data.transformator.rot_mat, getRotMatZ(-a * Math.PI / 20.0));
-    map_data1.transformator.transformMapData (map_data1);
-    map_data2.transformator.transformMapData (map_data2);
-    map_data1.transformator.transformMapData (city_data);
-    map_data1.transformator.rot_mat = I;
-    map_data2.transformator.rot_mat = I;
+    transformator.rot_mat = matMulMat(getRotMatZ(a * Math.PI / 20.0), transformator.rot_mat);
     drawPolygons ();
   }
 
   this.catchUp = function (event)
   {
-    map_data1.transformator.transformMapData (map_data1);
-    map_data2.transformator.transformMapData (map_data2);
-    map_data1.transformator.transformMapData (city_data);
-    map_data1.transformator.rot_mat = I;
-    map_data2.transformator.rot_mat = I;
     this.down = false;
     this.rotation = false;
     projector.setSpeedupLevel(1);
     drawPolygons();
-  }
-  this.catchDblClick = function (event) {
-    projector_counter += 1;
-    projector = projectors[projector_counter % projectors.length];
-    drawPolygons ();
   }
 }
 
@@ -714,9 +573,9 @@ function ResizeHandler ()
 
 var resize_handler = new ResizeHandler ();
 
-function drawPolygon (context, polygon, transformator)
+function drawPolygon (context, polygon)
 {
-  let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint (pt_xyz)); });
+  let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint(pt_xyz)); });
   let cuts = [];
   for (let i = 0, n = pts_ab.length - 1; i < n; i++)
     if (projector.suppressLine (pts_ab[i], pts_ab[i + 1]))
@@ -732,97 +591,78 @@ function drawPolygon (context, polygon, transformator)
   }
 }
 
-function drawArea (context, polygon, transformator)
-{
-  let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint (pt_xyz)); });
-  let suppressed_lines = [];
-  for (let i = 0, n = pts_ab.length - 1; i < n; i++)
-    if (projector.suppressLine (pts_ab[i], pts_ab[i + 1]))
-      suppressed_lines.push (i);
-  let pts_xy = pts_ab.map (function (pt_ab) { return projector.projectPoint (pt_ab); });
-  let sub_polygons = projector.getCuttedPolygons (pts_xy, suppressed_lines);
-  for (const sub_polygon of sub_polygons)
-  {
-    context.moveTo (sub_polygon[0].x, sub_polygon[0].y);
-    for (const pt of sub_polygon)
-      context.lineTo (pt.x, pt.y);
-  }
-}
-
 function drawPolygons ()
 {
-  if (map_data1.loaded && map_data2.loaded && city_data.loaded && pixel_data.loaded)
+  if (map_data.loaded && city_data.loaded && image_datas.every(function(image_data){return image_data.loaded;}))
   {
     let frame = document.getElementById ("frame");
     let map = document.getElementById ("map");
     map.width = frame.clientWidth;
     map.height = frame.clientHeight;
+    let select_projection = document.getElementById("select_projection");
+    projector = projectors.filter(function(prj){return prj.key == select_projection.value;})[0];
     projector.setSize (map.width, map.height);
     let context = map.getContext ("2d");
     projector.drawPassepartout (context);
-    projector.drawPixelMap(context, pixel_data.data);
-    context.lineWidth = 1;
-    context.strokeStyle = "#CCCCCC";
-    //context.fillStyle = "rgba(0,128,0,0.5)";
-    //context.beginPath ();
-    //for (const polygon of map_data2.polygons)
-    //{
-    //  drawPolygon (context, polygon, map_data2.transformator);
-    //}
-    //context.fill ();
-    //context.stroke ();
-    context.strokeStyle = "#CCCCCC";
-    //context.fillStyle = "rgba(128,0,0,0.5)";
-    context.beginPath ();
-    for (const polygon of map_data1.polygons)
+    
+    let select_image = document.getElementById("select_image");
+    projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data);
+
+    let boundaries = document.getElementById("boundaries");
+    if (boundaries.checked)
     {
-      drawPolygon(context, polygon, map_data1.transformator);
+      context.lineWidth = 1;
+      let color_boundaries = document.getElementById("color_boundaries");
+      context.strokeStyle = color_boundaries.value;
+      context.beginPath ();
+      for (const polygon of map_data.polygons)
+      {
+        drawPolygon(context, polygon);
+      }
+      context.stroke ();
     }
-    //context.fill ();
-    context.stroke ();
     context.strokeStyle = "red";
     context.beginPath ();
     for (const polygon of city_data.polygons)
     {
-      drawPolygon (context, polygon, map_data1.transformator);
+      drawPolygon(context, polygon);
     }
     context.stroke ();
   }
 }
 
-function changePixelData(event)
+window.onload = function()
 {
-  if (event.target.value == "base")
-    loadPixelData("./map_base.jpg", pixel_data);
-  else if (event.target.value == "color")
-    loadPixelData("./map_color.jpg", pixel_data);
-  else if (event.target.value == "shape")
-    loadPixelData("./map_shape.png", pixel_data);
-}
+  loadJsonData("./ne_110m_countries_red.json", json2MapData, map_data);
+  loadJsonData("./cities_red.json", json2CityData, city_data);
+  image_datas.forEach(function(image_data){loadImageData(image_data)});
 
-window.onload = function ()
-{
-  loadJsonData ("./ne_110m_countries_red.json", json2MapData, map_data1);
-  loadJsonData ("./cities_red.json", json2CityData, city_data);
-  loadPixelData("./map_color.jpg", pixel_data);
-  let frame = document.getElementById ("frame");
+  let select_projection = document.getElementById("select_projection");
+  for (const projector of projectors)
+  {
+    let option = document.createElement("option");
+    option.value = projector.key;
+    option.textContent = projector.name;
+    option.selected = projector.preselected;
+    select_projection.appendChild(option);
+  }
+
+  let frame = document.getElementById("frame");
   frame.onmousedown = mouse_tracker.catchDown;
   frame.onmouseup = mouse_tracker.catchUp;
   frame.onmouseleave = mouse_tracker.catchUp;
   frame.onmousemove = mouse_tracker.catchMove;
   frame.onwheel = mouse_tracker.catchWheel;
-  frame.ondblclick = mouse_tracker.catchDblClick;
   frame.ontouchstart = mouse_tracker.catchDown;
   frame.ontouchend = mouse_tracker.catchUp;
   frame.ontouchcancel = mouse_tracker.catchUp;
   frame.ontouchmove = mouse_tracker.catchMove;
   window.onresize = resize_handler.catchResize;
-  let selector_pixel_map = document.getElementById("selector_pixel_map");
-  selector_pixel_map.onchange = changePixelData;
-}
-
-function log(msg)
-{
-  const container = document.getElementById("log");
-  container.textContent = `${msg}\n${container.textContent}`;
+  let select_image = document.getElementById("select_image");
+  select_image.onchange = resize_handler.catchResize;
+  let boundaries = document.getElementById("boundaries");
+  boundaries.onchange = resize_handler.catchResize;
+  let color_boundaries = document.getElementById("color_boundaries");
+  color_boundaries.onchange = resize_handler.catchResize;
+  select_projection.onchange = resize_handler.catchResize;
 }

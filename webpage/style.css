@@ -23,25 +23,21 @@ body {
     background-color: transparent;
 }
 
+#user_input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 4px;
+    color: #fff;
+    background-color: #00000066;
+}
+
 select {
     margin: 4px;
     border: 1px solid #fff;
     border-radius: 4px;
     background-color: transparent;
+    font-family: sans-serif;
+    font-size: small;
     color: #fff;
-}
-
-#selector_pixel_map {
-    position: absolute;
-    top: 0;
-    left: 0;
-}
-
-#log {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    height: 200px;
-    width: 400px;
-    overflow: scroll;
 }

@@ -12,12 +12,19 @@
       <canvas id="map">
         Here a map should be shown in browsers which support HTML5.
       </canvas>
-      <select id="selector_pixel_map">
-        <option value="base">Base</option>
-        <option value="color">Color</option>
-        <option value="shape">Shape</option>
-    </select>
+      <div id="user_input">
+        <label for="select_image">Background image</label>
+        <select id="select_image">
+        </select>
+        <br />
+        <label for="boundaries">Boundaries</label>
+        <input type="checkbox" id="boundaries" checked />
+        <input type="color" id="color_boundaries" value="#bbbbbb" />
+        <br />
+        <label for="select_projection">Projection</label>
+        <select id="select_projection">
+        </select>
+      </div>
     </div>
-    <pre id="log" style="border: 1px solid #fff; color: #fff;"></pre>
   </body>
 </html>
