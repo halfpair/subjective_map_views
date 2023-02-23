@@ -270,6 +270,10 @@ class BaseProjector
   {
     if (image_data === null)
       return;
+    let bgclr = [parseInt(this.frame_color.substr(1, 2), 16),
+                 parseInt(this.frame_color.substr(3, 2), 16),
+                 parseInt(this.frame_color.substr(5, 2), 16),
+                 255];
     let interp_data = new ImageData(this.draw_width, this.draw_width / this.side_ratio);
     let fx = image_data.width / 2.0 / Math.PI;
     let fy = image_data.height / Math.PI;
@@ -280,9 +284,9 @@ class BaseProjector
       {
         let xo = x * 4;
         let pt_ab = projector.backProjectPoint({x: x + projector.offset.x, y: y + projector.offset.y});
-        let transp = isNaN(pt_ab.a) || isNaN(pt_ab.b);
+        let is_invalid = isNaN(pt_ab.a) || isNaN(pt_ab.b);
         let xi = 0, yi = 0;
-        if (!transp)
+        if (!is_invalid)
         {
           let pt_xyz = ab2xyz(pt_ab);
           pt_xyz = transformator.transformPointInverse(pt_xyz);
@@ -292,7 +296,7 @@ class BaseProjector
         }
         for (let c = 0; c < 4; c++)
         {
-          let v = transp && c < 3 ? parseInt(projector.frame_color.substr(c*2+1, 2), 16) : image_data.data[yi + xi + c];
+          let v = is_invalid ? bgclr[c] : image_data.data[yi + xi + c];
           for (let ly = 0; ly < this.speedup_level; ly++)
             for (let lx = 0; lx < this.speedup_level; lx++)
               interp_data.data[yo + interp_data.width * 4 * ly + xo + c + 4 * lx] = v;
