@@ -206,14 +206,34 @@ var transformator = new Transformator();
 
 class MapData
 {
-  constructor ()
+  constructor()
   {
     this.loaded = false;
     this.polygons = [];
   }
 }
 
-var map_data = new MapData ();
+var map_data = new MapData();
+
+var graticule_data = new MapData();
+
+function createGraticuleData()
+{
+  for (let i = 0, ni = 180; i < ni; i+=15)
+  {
+    let longitude = [];
+    let latitude = [];
+    for (let j = 0, nj = 360; j <= nj; j++)
+    {
+      longitude.push(ab2xyz({a: i * Math.PI / 180.0, b: j * Math.PI / 180.0}));
+      latitude.push(ab2xyz({a: j * Math.PI / 180.0, b: (i - 90) * Math.PI / 180.0}));
+    }
+    graticule_data.polygons.push(longitude);
+    if (i != 0)
+      graticule_data.polygons.push(latitude);
+  }
+  graticule_data.loaded = true;
+}
 
 var image_datas = [{loaded: false, data: null, key: "none", name: "None", src: "", preselected: false},
                    {loaded: false, data: null, key: "base", name: "Base", src: "./map_base.jpg", preselected: false},
@@ -615,7 +635,7 @@ function drawPolygon (context, polygon)
 
 function drawPolygons ()
 {
-  if (map_data.loaded && city_data.loaded && image_datas.every(function(image_data){return image_data.loaded;}))
+  if (map_data.loaded && graticule_data.loaded && city_data.loaded && image_datas.every(function(image_data){return image_data.loaded;}))
   {
     let frame = document.getElementById ("frame");
     let map = document.getElementById ("map");
@@ -629,6 +649,20 @@ function drawPolygons ()
     
     let select_image = document.getElementById("select_image");
     projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data);
+
+    let graticule = document.getElementById("graticule");
+    if (graticule.checked)
+    {
+      context.lineWidth = 0.5;
+      let color_graticule = document.getElementById("color_graticule");
+      context.strokeStyle = color_graticule.value;
+      context.beginPath ();
+      for (const polygon of graticule_data.polygons)
+      {
+        drawPolygon(context, polygon);
+      }
+      context.stroke ();
+    }
 
     let boundaries = document.getElementById("boundaries");
     if (boundaries.checked)
@@ -657,6 +691,7 @@ window.onload = function()
 {
   loadJsonData("./ne_110m_countries_red.json", json2MapData, map_data);
   loadJsonData("./cities_red.json", json2CityData, city_data);
+  createGraticuleData();
   image_datas.forEach(function(image_data){loadImageData(image_data)});
 
   let select_projection = document.getElementById("select_projection");
@@ -686,5 +721,9 @@ window.onload = function()
   boundaries.onchange = resize_handler.catchResize;
   let color_boundaries = document.getElementById("color_boundaries");
   color_boundaries.onchange = resize_handler.catchResize;
+  let graticule = document.getElementById("graticule");
+  graticule.onchange = resize_handler.catchResize;
+  let color_graticule = document.getElementById("color_graticule");
+  color_graticule.onchange = resize_handler.catchResize;
   select_projection.onchange = resize_handler.catchResize;
 }
