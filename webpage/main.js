@@ -171,16 +171,34 @@ function getRotMatZ (a)
 
 class Transformator
 {
-  rot_mat = I;
+  #rot_mat;
+  #inv_rot_mat;
+
+  constructor()
+  {
+    this.#rot_mat = I;
+    this.#inv_rot_mat = I;
+  }
+
+  setRotMat(rot_mat)
+  {
+    this.#rot_mat = rot_mat;
+    this.#inv_rot_mat = matT(rot_mat);
+  }
+
+  getRotMat()
+  {
+    return this.#rot_mat;
+  }
 
   transformPoint(pt_xyz)
   {
-    return matMulPt (this.rot_mat, pt_xyz);
+    return matMulPt(this.#rot_mat, pt_xyz);
   }
 
   transformPointInverse(pt_xyz)
   {
-    return matMulPt(matT(this.rot_mat), pt_xyz);
+    return matMulPt(this.#inv_rot_mat, pt_xyz);
   }
 }
 
@@ -478,7 +496,7 @@ function MouseTracker ()
     if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b) && (event.button === 0 || event.button === undefined))
     {
       this.down = true;
-      this.rot_mat = transformator.rot_mat;
+      this.rot_mat = transformator.getRotMat();
       let touch_events = event.touches;
       if (touch_events !== undefined && touch_events.length == 2)
       {
@@ -519,7 +537,7 @@ function MouseTracker ()
           let v2 = {x: touch_pos2_.clientX - down_pos_.clientX, y: touch_pos2_.clientY - down_pos_.clientY};
           let angle = Math.acos((v1.x * v2.x + v1.y * v2.y) / (Math.sqrt(v1.x**2 + v1.y**2) * Math.sqrt(v2.x**2 + v2.y**2)));
           angle *= v1.x * v2.y - v1.y * v2.x < 0.0 ? -1.0 : 1.0;
-          transformator.rot_mat = matMulMat(getRotMatZ(-angle), this.rot_mat);
+          transformator.setRotMat(matMulMat(getRotMatZ(-angle), this.rot_mat));
         }
       }
       else
@@ -529,7 +547,7 @@ function MouseTracker ()
         event.returnValue = false;
         if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
         {
-          transformator.rot_mat = matMulMat(matMulMat(getRotMatX(this.down_pos.b - cur_pos.b), getRotMatY(cur_pos.a - this.down_pos.a)), this.rot_mat);
+          transformator.setRotMat(matMulMat(matMulMat(getRotMatX(this.down_pos.b - cur_pos.b), getRotMatY(cur_pos.a - this.down_pos.a)), this.rot_mat));
         }
       }
       let t0 = performance.now();
@@ -543,7 +561,7 @@ function MouseTracker ()
     event.cancelBubble = true;
     event.returnValue = false;
     const a = event.deltaY > 0 ? 1.0 : -1.0;
-    transformator.rot_mat = matMulMat(getRotMatZ(a * Math.PI / 20.0), transformator.rot_mat);
+    transformator.setRotMat(matMulMat(getRotMatZ(a * Math.PI / 20.0), transformator.getRotMat()));
     drawPolygons ();
   }
 
