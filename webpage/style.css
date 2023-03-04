@@ -32,7 +32,7 @@ body {
     background-color: #00000066;
 }
 
-select {
+input {
     margin: 4px;
     border: 1px solid #fff;
     border-radius: 4px;
@@ -40,4 +40,10 @@ select {
     font-family: sans-serif;
     font-size: small;
     color: #fff;
+}
+
+.warning {
+    font-family: sans-serif;
+    font-size: small;
+    color: #bbb;
 }

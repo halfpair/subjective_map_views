@@ -85,29 +85,26 @@ var city_data = new CityData ();
 
 function json2CityData (json_data, data)
 {
-  for (const [key, value] of Object.entries (json_data))
+  for (const [key, value] of Object.entries(json_data))
+    data.data[key] = {a: value[0] * Math.PI / 180.0, b: value[1] * Math.PI / 180.0};
+
+  let beeline_list = document.getElementById("beeline_list");
+  for (const key of Object.keys(json_data).sort())
   {
-    data.data[key] = ab2xyz ({a: value[0] * Math.PI / 180.0, b: value[1] * Math.PI / 180.0});
+    let option = document.createElement("option");
+    option.value = key;
+    beeline_list.appendChild(option);
   }
-  let pt_B = data.data["Berlin"];
-  let pt_C = data.data["Canberra"];
-  let dot = ptDotPt (pt_B, pt_C);
-  let phi = Math.acos (dot);
-  let sphi = Math.sin (phi);
-  let pt_h = {x: (pt_C.x - pt_B.x * dot) / sphi,
-              y: (pt_C.y - pt_B.y * dot) / sphi,
-              z: (pt_C.z - pt_B.z * dot) / sphi};
-  let step_width = Math.PI / 180.0 / 60; // minutes -> 1 seamile
-  let point_set = [];
-  for (let beta = 0.0; beta <= phi; beta += step_width)
-  {
-    let cbeta = Math.cos (beta);
-    let sbeta = Math.sin (beta);
-    point_set.push ({x: pt_B.x * cbeta + pt_h.x * sbeta,
-                    y: pt_B.y * cbeta + pt_h.y * sbeta,
-                    z: pt_B.z * cbeta + pt_h.z * sbeta});
-  }
-  data.polygons.push (point_set);
+}
+
+function checkCityName(event)
+{
+  let warning = event.target == document.getElementById("beeline_start") ? document.getElementById("beeline_start_warning") : document.getElementById("beeline_end_warning");
+  let old_text = warning.innerText;
+  warning.innerText = event.target.value in city_data.data ? "" : "Unknown place";
+
+  if (old_text !== warning.innerText)
+    resize_handler.catchResize();
 }
 
 function ptDotPt (pt_xyz_1, pt_xyz_2)
@@ -233,6 +230,24 @@ function createGraticuleData()
       graticule_data.polygons.push(latitude);
   }
   graticule_data.loaded = true;
+}
+
+var distance_data = new MapData();
+
+function createDistanceData()
+{
+  for (let i = 9, ni = 180; i < ni; i+=9)
+  {
+    let ring = [];
+    let a = i * Math.PI / 180.0;
+    for (let j = 0, nj = 360; j <= nj; j++)
+    {
+      b = j * Math.PI / 180.0;
+      ring.push({x: Math.sin(a) * Math.cos(b), y: Math.sin(a) * Math.sin(b), z: Math.cos(a)});
+    }
+    distance_data.polygons.push(ring);
+  }
+  distance_data.loaded = true;
 }
 
 var image_datas = [{loaded: false, data: null, key: "none", name: "None", src: "", preselected: false},
@@ -635,7 +650,7 @@ function drawPolygon (context, polygon)
 
 function drawPolygons ()
 {
-  if (map_data.loaded && graticule_data.loaded && city_data.loaded && image_datas.every(function(image_data){return image_data.loaded;}))
+  if (map_data.loaded && graticule_data.loaded && city_data.loaded && distance_data.loaded && image_datas.every(function(image_data){return image_data.loaded;}))
   {
     let frame = document.getElementById ("frame");
     let map = document.getElementById ("map");
@@ -658,9 +673,7 @@ function drawPolygons ()
       context.strokeStyle = color_graticule.value;
       context.beginPath ();
       for (const polygon of graticule_data.polygons)
-      {
         drawPolygon(context, polygon);
-      }
       context.stroke ();
     }
 
@@ -672,18 +685,57 @@ function drawPolygons ()
       context.strokeStyle = color_boundaries.value;
       context.beginPath ();
       for (const polygon of map_data.polygons)
-      {
         drawPolygon(context, polygon);
-      }
       context.stroke ();
     }
-    context.strokeStyle = "red";
-    context.beginPath ();
-    for (const polygon of city_data.polygons)
+
+    let distances = document.getElementById("distances");
+    let beeline_start = document.getElementById("beeline_start");
+    if (distances.checked && beeline_start.value in city_data.data)
     {
-      drawPolygon(context, polygon);
+      context.lineWidth = 0.5;
+      let color_distances = document.getElementById("color_distances");
+      context.strokeStyle = color_distances.value;
+      let city_coord = city_data.data[beeline_start.value];
+      let city_trafo = new Transformator();
+      city_trafo.setRotMat(matMulMat(getRotMatY(city_coord.a), getRotMatX(-city_coord.b)));
+      context.beginPath();
+      for (const polygon of distance_data.polygons)
+      {
+        let trafo_poly = polygon.map(function(pt_xyz){ return city_trafo.transformPoint(pt_xyz); });
+        drawPolygon(context, trafo_poly);
+      }
+      context.stroke();
     }
-    context.stroke ();
+
+    let beeline_end = document.getElementById("beeline_end");
+    if (beeline_start.value in city_data.data && beeline_end.value in city_data.data)
+    {
+      let pt1 = ab2xyz(city_data.data[beeline_start.value]);
+      let pt2 = ab2xyz(city_data.data[beeline_end.value]);
+      let dot = ptDotPt(pt1, pt2);
+      let phi = Math.acos(dot);
+      let sphi = Math.sin(phi);
+      let pt_h = {x: (pt2.x - pt1.x * dot) / sphi,
+                  y: (pt2.y - pt1.y * dot) / sphi,
+                  z: (pt2.z - pt1.z * dot) / sphi};
+      let step_width = Math.PI / 180.0;
+      let polygon = [];
+      for (let beta = 0.0; beta <= phi; beta += step_width)
+      {
+        let cbeta = Math.cos(beta);
+        let sbeta = Math.sin(beta);
+        polygon.push({x: pt1.x * cbeta + pt_h.x * sbeta,
+                      y: pt1.y * cbeta + pt_h.y * sbeta,
+                      z: pt1.z * cbeta + pt_h.z * sbeta});
+      }
+      context.lineWidth = 1.0;
+      let color_beeline = document.getElementById("color_beeline");
+      context.strokeStyle = color_beeline.value;
+      context.beginPath ();
+      drawPolygon(context, polygon);
+      context.stroke ();
+    }
   }
 }
 
@@ -692,6 +744,7 @@ window.onload = function()
   loadJsonData("./ne_110m_countries_red.json", json2MapData, map_data);
   loadJsonData("./cities_red.json", json2CityData, city_data);
   createGraticuleData();
+  createDistanceData();
   image_datas.forEach(function(image_data){loadImageData(image_data)});
 
   let select_projection = document.getElementById("select_projection");
@@ -725,5 +778,15 @@ window.onload = function()
   graticule.onchange = resize_handler.catchResize;
   let color_graticule = document.getElementById("color_graticule");
   color_graticule.onchange = resize_handler.catchResize;
+  let distances = document.getElementById("distances");
+  distances.onchange = resize_handler.catchResize;
+  let color_distances = document.getElementById("color_distances");
+  color_distances.onchange = resize_handler.catchResize;
+  let beeline_start = document.getElementById("beeline_start");
+  beeline_start.oninput = checkCityName;
+  let beeline_end = document.getElementById("beeline_end");
+  beeline_end.oninput = checkCityName;
+  let color_beeline = document.getElementById("color_beeline");
+  color_beeline.onchange = resize_handler.catchResize;
   select_projection.onchange = resize_handler.catchResize;
 }
