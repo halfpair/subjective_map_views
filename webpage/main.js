@@ -525,28 +525,36 @@ function MouseTracker ()
   this.touch_pos2 = {x: 0, y: 0};
   this.rot_mat = I;
 
-  this.catchDown = function (event)
+  this.catchDown = function(event)
   {
-    let cur_pos = projector.backProjectPoint ({x: event.layerX, y: event.layerY});
-    if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b) && (event.button === 0 || event.button === undefined))
+    this.rot_mat = transformator.getRotMat();
+    if (event.button === 0)
     {
-      this.down = true;
-      this.rot_mat = transformator.getRotMat();
-      let touch_events = event.touches;
-      if (touch_events !== undefined && touch_events.length == 2)
+      let cur_pos = projector.backProjectPoint({x: event.layerX, y: event.layerY});
+      if (!isNaN(cur_pos.a) && !isNaN(cur_pos.b))
       {
-        this.rotation = true;
-        this.down_pos = touch_events.item(0);
-        this.touch_pos2 = touch_events.item(1);
-      }
-      else
-      {
+        this.down = true;
         this.down_pos = cur_pos;
+      }
+    }
+    else if (event.touches !== undefined)
+    {
+      let cur_pos = projector.backProjectPoint({x: event.touches.item(0).clientX, y: event.touches.item(0).clientY});
+      if (!isNaN(cur_pos.a) && !isNaN(cur_pos.b))
+      {
+        this.down = true;
+        this.down_pos = cur_pos;
+        if (event.touches.length == 2)
+        {
+          this.rotation = true;
+          this.down_pos = event.touches.item(0);
+          this.touch_pos2 = event.touches.item(1);
+        }
       }
     }
   }
 
-  this.catchMove = function (event)
+  this.catchMove = function(event)
   {
     if (this.down)
     {
@@ -577,7 +585,7 @@ function MouseTracker ()
       }
       else
       {
-        let cur_pos = projector.backProjectPoint ({x: event.layerX, y: event.layerY});
+        let cur_pos = event.touches === undefined ? projector.backProjectPoint({x: event.layerX, y: event.layerY}) : projector.backProjectPoint({x: event.touches.item(0).clientX, y: event.touches.item(0).clientY});
         event.cancelBubble = true;
         event.returnValue = false;
         if (!isNaN (cur_pos.a) && !isNaN (cur_pos.b))
