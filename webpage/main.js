@@ -100,10 +100,9 @@ function json2CityData (json_data, data)
 function checkCityName(event)
 {
   let warning = event.target == document.getElementById("beeline_start") ? document.getElementById("beeline_start_warning") : document.getElementById("beeline_end_warning");
-  let old_text = warning.innerText;
   warning.innerText = event.target.value in city_data.data ? "" : "Unknown place";
 
-  if (old_text !== warning.innerText)
+  if (!warning.innerText)
     resize_handler.catchResize();
 }
 
@@ -200,12 +199,6 @@ class Transformator
 }
 
 var transformator = new Transformator();
-
-function resetTransformator()
-{
-  transformator.setRotMat(I);
-  resize_handler.catchResize();
-}
 
 class MapData
 {
@@ -798,11 +791,26 @@ window.onload = function()
   color_distances.onchange = resize_handler.catchResize;
   let beeline_start = document.getElementById("beeline_start");
   beeline_start.oninput = checkCityName;
+  let center_start = document.getElementById("center_start");
+  center_start.onclick = function()
+                         {
+                           let city = document.getElementById("beeline_start");
+                           if (city.value in city_data.data)
+                           {
+                            let city_coord = city_data.data[city.value];
+                            transformator.setRotMat(matMulMat(getRotMatX(city_coord.b), getRotMatY(-city_coord.a)));
+                            resize_handler.catchResize();
+                           }
+                         };
   let beeline_end = document.getElementById("beeline_end");
   beeline_end.oninput = checkCityName;
   let color_beeline = document.getElementById("color_beeline");
   color_beeline.onchange = resize_handler.catchResize;
   let reset_trafo = document.getElementById("reset_trafo");
-  reset_trafo.onclick = resetTransformator;
+  reset_trafo.onclick = function()
+                        {
+                          transformator.setRotMat(I);
+                          resize_handler.catchResize();
+                        };
   select_projection.onchange = resize_handler.catchResize;
 }
