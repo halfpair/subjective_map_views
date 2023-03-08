@@ -32,7 +32,7 @@ body {
     background-color: #00000066;
 }
 
-input {
+.city_input {
     margin: 4px;
     border: 1px solid #fff;
     border-radius: 4px;

@@ -201,6 +201,12 @@ class Transformator
 
 var transformator = new Transformator();
 
+function resetTransformator()
+{
+  transformator.setRotMat(I);
+  resize_handler.catchResize();
+}
+
 class MapData
 {
   constructor()
@@ -796,5 +802,7 @@ window.onload = function()
   beeline_end.oninput = checkCityName;
   let color_beeline = document.getElementById("color_beeline");
   color_beeline.onchange = resize_handler.catchResize;
+  let reset_trafo = document.getElementById("reset_trafo");
+  reset_trafo.onclick = resetTransformator;
   select_projection.onchange = resize_handler.catchResize;
 }
