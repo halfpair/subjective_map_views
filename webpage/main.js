@@ -670,6 +670,17 @@ function ResizeHandler ()
 
 var resize_handler = new ResizeHandler ();
 
+class BackGroundImage
+{
+  constructor()
+  {
+    this.image = new Image();
+    this.loaded = false;
+  }
+}
+
+var background_image = new BackGroundImage();
+
 function drawPolygon (context, polygon)
 {
   let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint(pt_xyz)); });
@@ -700,7 +711,13 @@ function drawPolygons ()
     projector = projectors.filter(function(prj){return prj.key == select_projection.value;})[0];
     projector.setSize (map.width, map.height);
     let context = map.getContext ("2d");
+
     projector.drawPassepartout (context);
+
+    if (background_image.loaded)
+    {
+      context.drawImage(background_image.image, 0, 0, map.width, map.height);
+    }
     
     let select_image = document.getElementById("select_image");
     projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data);
@@ -766,6 +783,22 @@ function drawPolygons ()
   }
 }
 
+function switchOverlay(event)
+{
+  if (event.target.checked)
+  {
+    // switch on
+    let map = document.getElementById("map");
+    background_image.image.src = map.toDataURL();
+    background_image.image.addEventListener("load",
+                                            function()
+                                            {
+                                              background_image.loaded = true;
+                                              resize_handler.catchResize();
+                                            });
+  }
+}
+
 window.onload = function()
 {
   loadJsonData("./ne_110m_countries_red.json", json2MapData, map_data);
@@ -795,6 +828,10 @@ window.onload = function()
   frame.ontouchcancel = mouse_tracker.catchUp;
   frame.ontouchmove = mouse_tracker.catchMove;
   window.onresize = resize_handler.catchResize;
+  let overlay = document.getElementById("overlay");
+  overlay.onchange = switchOverlay;
+  let overlay_alpha = document.getElementById("overlay_alpha");
+  overlay_alpha.onmousedown = function(event){event.cancelBubble = true;};
   let select_image = document.getElementById("select_image");
   select_image.onchange = resize_handler.catchResize;
   let boundaries = document.getElementById("boundaries");
