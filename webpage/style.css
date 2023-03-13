@@ -4,7 +4,6 @@ html {
 
 body {
     font-family: sans-serif;
-    font-size: small;
 }
 
 #frame {
@@ -36,14 +35,7 @@ body {
     margin: 4px;
     border: 1px solid #fff;
     border-radius: 4px;
-    background-color: transparent;
+    background-color: #f004;
     font-family: sans-serif;
-    font-size: small;
     color: #fff;
-}
-
-.warning {
-    font-family: sans-serif;
-    font-size: small;
-    color: #bbb;
 }

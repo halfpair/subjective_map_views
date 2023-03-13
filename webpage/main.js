@@ -121,11 +121,15 @@ function getGreatCircleSegmentPoint(gcsd, beta)
 
 function checkCityName(event)
 {
-  let warning = event.target == document.getElementById("beeline_start") ? document.getElementById("beeline_start_warning") : document.getElementById("beeline_end_warning");
-  warning.innerText = event.target.value in city_data.data ? "" : "Unknown place";
-
-  if (!warning.innerText)
+  if (event.target.value in city_data.data)
+  {
+    event.target.style.backgroundColor = "transparent";
     resize_handler.catchResize();
+  }
+  else
+  {
+    event.target.style.backgroundColor = "#f004";
+  }
 }
 
 function ptDotPt (pt_xyz_1, pt_xyz_2)
