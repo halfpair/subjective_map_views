@@ -97,6 +97,28 @@ function json2CityData (json_data, data)
   }
 }
 
+function getGreatCircleSegmentData(pt_ab1, pt_ab2)
+{
+  let pt1 = ab2xyz(pt_ab1);
+  let pt2 = ab2xyz(pt_ab2);
+  let dot = ptDotPt(pt1, pt2);
+  let phi = Math.acos(dot);
+  let sphi = Math.sin(phi);
+  let pt_h = {x: (pt2.x - pt1.x * dot) / sphi,
+              y: (pt2.y - pt1.y * dot) / sphi,
+              z: (pt2.z - pt1.z * dot) / sphi};
+  return {phi: phi, pt_1: pt1, pt_h: pt_h};
+}
+
+function getGreatCircleSegmentPoint(gcsd, beta)
+{
+  let cbeta = Math.cos(beta);
+  let sbeta = Math.sin(beta);
+  return {x: gcsd.pt_1.x * cbeta + gcsd.pt_h.x * sbeta,
+          y: gcsd.pt_1.y * cbeta + gcsd.pt_h.y * sbeta,
+          z: gcsd.pt_1.z * cbeta + gcsd.pt_h.z * sbeta};
+}
+
 function checkCityName(event)
 {
   let warning = event.target == document.getElementById("beeline_start") ? document.getElementById("beeline_start_warning") : document.getElementById("beeline_end_warning");
@@ -109,6 +131,13 @@ function checkCityName(event)
 function ptDotPt (pt_xyz_1, pt_xyz_2)
 {
   return pt_xyz_1.x * pt_xyz_2.x + pt_xyz_1.y * pt_xyz_2.y + pt_xyz_1.z * pt_xyz_2.z;
+}
+
+function ptCrossPt(pt_xyz_1, pt_xyz_2)
+{
+  return {x: pt_xyz_1.y * pt_xyz_2.z - pt_xyz_1.z * pt_xyz_2.y,
+          y: pt_xyz_1.z * pt_xyz_2.x - pt_xyz_1.x * pt_xyz_2.z,
+          z: pt_xyz_1.x * pt_xyz_2.y - pt_xyz_1.y * pt_xyz_2.x,};
 }
 
 const I = [[1.0, 0.0, 0.0],
@@ -718,24 +747,11 @@ function drawPolygons ()
     let beeline_end = document.getElementById("beeline_end");
     if (beeline_start.value in city_data.data && beeline_end.value in city_data.data)
     {
-      let pt1 = ab2xyz(city_data.data[beeline_start.value]);
-      let pt2 = ab2xyz(city_data.data[beeline_end.value]);
-      let dot = ptDotPt(pt1, pt2);
-      let phi = Math.acos(dot);
-      let sphi = Math.sin(phi);
-      let pt_h = {x: (pt2.x - pt1.x * dot) / sphi,
-                  y: (pt2.y - pt1.y * dot) / sphi,
-                  z: (pt2.z - pt1.z * dot) / sphi};
+      let gcsd = getGreatCircleSegmentData(city_data.data[beeline_start.value], city_data.data[beeline_end.value]);
       let step_width = Math.PI / 180.0;
       let polygon = [];
-      for (let beta = 0.0; beta <= phi; beta += step_width)
-      {
-        let cbeta = Math.cos(beta);
-        let sbeta = Math.sin(beta);
-        polygon.push({x: pt1.x * cbeta + pt_h.x * sbeta,
-                      y: pt1.y * cbeta + pt_h.y * sbeta,
-                      z: pt1.z * cbeta + pt_h.z * sbeta});
-      }
+      for (let beta = 0.0; beta <= gcsd.phi; beta += step_width)
+        polygon.push(getGreatCircleSegmentPoint(gcsd, beta));
       context.lineWidth = 1.0;
       let color_beeline = document.getElementById("color_beeline");
       context.strokeStyle = color_beeline.value;
@@ -794,10 +810,10 @@ window.onload = function()
   let center_start = document.getElementById("center_start");
   center_start.onclick = function()
                          {
-                           let city = document.getElementById("beeline_start");
-                           if (city.value in city_data.data)
+                           let city = document.getElementById("beeline_start").value;
+                           if (city in city_data.data)
                            {
-                            let city_coord = city_data.data[city.value];
+                            let city_coord = city_data.data[city];
                             transformator.setRotMat(matMulMat(getRotMatX(city_coord.b), getRotMatY(-city_coord.a)));
                             resize_handler.catchResize();
                            }
@@ -806,6 +822,21 @@ window.onload = function()
   beeline_end.oninput = checkCityName;
   let color_beeline = document.getElementById("color_beeline");
   color_beeline.onchange = resize_handler.catchResize;
+  let center_beeline = document.getElementById("center_beeline");
+  center_beeline.onclick = function()
+                           {
+                            let start = document.getElementById("beeline_start").value;
+                            let end = document.getElementById("beeline_end").value;
+                            if (start in city_data.data && end in city_data.data)
+                            {
+                              let gcsd = getGreatCircleSegmentData(city_data.data[start], city_data.data[end]);
+                              let pt_mid = xyz2ab(getGreatCircleSegmentPoint(gcsd, gcsd.phi / 2));
+                              transformator.setRotMat(matMulMat(getRotMatX(pt_mid.b), getRotMatY(-pt_mid.a)));
+                              let bnorm = transformator.transformPoint(ptCrossPt(gcsd.pt_1, gcsd.pt_h));
+                              transformator.setRotMat(matMulMat(getRotMatZ(Math.PI / 2 - Math.atan2(bnorm.y, bnorm.x)), transformator.getRotMat()));
+                              resize_handler.catchResize();
+                            }
+                           };
   let reset_trafo = document.getElementById("reset_trafo");
   reset_trafo.onclick = function()
                         {
