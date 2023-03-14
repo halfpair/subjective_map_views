@@ -714,13 +714,18 @@ function drawPolygons ()
 
     projector.drawPassepartout (context);
 
-    if (background_image.loaded)
-    {
-      context.drawImage(background_image.image, 0, 0, map.width, map.height);
-    }
-    
     let select_image = document.getElementById("select_image");
     projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data);
+
+    let overlay = document.getElementById("overlay");
+    if (overlay.checked && background_image.loaded)
+    {
+      let overlay_alpha = document.getElementById("overlay_alpha");
+      let alpha = overlay_alpha.value / 255.0;
+      context.globalAlpha = 1.0 - alpha;
+      context.drawImage(background_image.image, 0, 0, map.width, map.height);
+      context.globalAlpha = alpha;
+    }
 
     let graticule = document.getElementById("graticule");
     if (graticule.checked)
