@@ -6,14 +6,21 @@ body {
     font-family: sans-serif;
 }
 
-#frame {
+.center {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.frame {
     position: relative;
     min-width: 128px;
     min-height: 64px;
     border: solid 1px black;
 }
 
-#map {
+.map {
     position: absolute;
     top: 0;
     left: 0;
@@ -22,7 +29,7 @@ body {
     background-color: transparent;
 }
 
-#user_input {
+.user_input {
     position: absolute;
     top: 0;
     left: 0;
@@ -31,7 +38,7 @@ body {
     background-color: #00000066;
 }
 
-.city_input {
+.beeline_start, .beeline_end {
     margin: 4px;
     border: 1px solid #fff;
     border-radius: 4px;

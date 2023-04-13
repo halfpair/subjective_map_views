@@ -23,7 +23,7 @@ function loadJsonData (src_url, converter, data)
       converter (json_data, data);
     }
     data.loaded = true;
-    resize_handler.catchResize (null);
+    renderer.handleResize();
   };
   request.send (null);
 }
@@ -46,14 +46,14 @@ function loadImageData(image_data)
         load_context.drawImage(img, 0, 0);
         image_data.data = load_context.getImageData(0,0, img.width, img.height);
         image_data.loaded = true;
-        resize_handler.catchResize(null);
+        renderer.handleResize();
       });
   }
   else
   {
     image_data.loaded = true;
   }
-  let select_image = document.getElementById("select_image");
+  let select_image = renderer.frame.getElementsByClassName("select_image")[0];
   let option = document.createElement("option");
   option.value = image_data.key;
   option.textContent = image_data.name;
@@ -88,7 +88,7 @@ function json2CityData (json_data, data)
   for (const [key, value] of Object.entries(json_data))
     data.data[key] = {a: value[0] * Math.PI / 180.0, b: value[1] * Math.PI / 180.0};
 
-  let beeline_list = document.getElementById("beeline_list");
+  let beeline_list = renderer.frame.getElementsByClassName("beeline_list")[0];
   for (const key of Object.keys(json_data).sort())
   {
     let option = document.createElement("option");
@@ -124,7 +124,7 @@ function checkCityName(event)
   if (event.target.value in city_data.data)
   {
     event.target.style.backgroundColor = "transparent";
-    resize_handler.catchResize();
+    renderer.handleResize();
   }
   else
   {
@@ -474,7 +474,7 @@ class MercatorProjector extends BaseProjector
     this.side_ratio = 1.0;
     this.lat_limit = Math.asin (Math.tanh(Math.PI / this.side_ratio));
     this.lat_prj_limit = Math.atanh (Math.sin(this.lat_limit));
-}
+  }
 
   projectPoint(pt_ab)
   {
@@ -651,25 +651,6 @@ function MouseTracker ()
 
 var mouse_tracker = new MouseTracker ();
 
-function ResizeHandler ()
-{
-  this.catchResize = function (event) {
-    let body = document.getElementsByTagName ("body")[0];
-    let style = window.getComputedStyle (body, null);
-    const mt = parseFloat (style.marginTop);
-    const mb = parseFloat (style.marginBottom);
-    const pt = parseFloat (style.paddingTop);
-    const pb = parseFloat (style.paddingBottom);
-    let html = document.getElementsByTagName ("html")[0];
-    let frame = document.getElementById ("frame");
-    frame.style.width = (body.clienWidth - 2) + "px";
-    frame.style.height = (html.clientHeight - mt - mb - pt - pb - 2) + "px";
-    drawPolygons ();
-  }
-}
-
-var resize_handler = new ResizeHandler ();
-
 class BackGroundImage
 {
   constructor()
@@ -701,90 +682,86 @@ function drawPolygon (context, polygon)
 
 function drawPolygons ()
 {
-  if (map_data.loaded && graticule_data.loaded && city_data.loaded && distance_data.loaded && image_datas.every(function(image_data){return image_data.loaded;}))
+  let map = renderer.frame.getElementsByClassName("map")[0];
+  map.width = parseInt(renderer.frame.style.width);
+  map.height = parseInt(renderer.frame.style.height);
+  let select_projection = renderer.frame.getElementsByClassName("select_projection")[0];
+  projector = projectors.filter(function(prj){return prj.key == select_projection.value;})[0];
+  projector.setSize (map.width, map.height);
+  let context = map.getContext ("2d");
+
+  projector.drawPassepartout (context);
+
+  let select_image = renderer.frame.getElementsByClassName("select_image")[0];
+  projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data);
+
+  let overlay = renderer.frame.getElementsByClassName("overlay")[0];
+  if (overlay.checked && background_image.loaded)
   {
-    let frame = document.getElementById ("frame");
-    let map = document.getElementById ("map");
-    map.width = frame.clientWidth;
-    map.height = frame.clientHeight;
-    let select_projection = document.getElementById("select_projection");
-    projector = projectors.filter(function(prj){return prj.key == select_projection.value;})[0];
-    projector.setSize (map.width, map.height);
-    let context = map.getContext ("2d");
+    let overlay_alpha = renderer.frame.getElementsByClassName("overlay_alpha")[0];
+    let alpha = overlay_alpha.value / 255.0;
+    context.globalAlpha = 1.0 - alpha;
+    context.drawImage(background_image.image, 0, 0, map.width, map.height);
+    context.globalAlpha = alpha;
+  }
 
-    projector.drawPassepartout (context);
-
-    let select_image = document.getElementById("select_image");
-    projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data);
-
-    let overlay = document.getElementById("overlay");
-    if (overlay.checked && background_image.loaded)
-    {
-      let overlay_alpha = document.getElementById("overlay_alpha");
-      let alpha = overlay_alpha.value / 255.0;
-      context.globalAlpha = 1.0 - alpha;
-      context.drawImage(background_image.image, 0, 0, map.width, map.height);
-      context.globalAlpha = alpha;
-    }
-
-    let graticule = document.getElementById("graticule");
-    if (graticule.checked)
-    {
-      context.lineWidth = 0.5;
-      let color_graticule = document.getElementById("color_graticule");
-      context.strokeStyle = color_graticule.value;
-      context.beginPath ();
-      for (const polygon of graticule_data.polygons)
-        drawPolygon(context, polygon);
-      context.stroke ();
-    }
-
-    let boundaries = document.getElementById("boundaries");
-    if (boundaries.checked)
-    {
-      context.lineWidth = 1;
-      let color_boundaries = document.getElementById("color_boundaries");
-      context.strokeStyle = color_boundaries.value;
-      context.beginPath ();
-      for (const polygon of map_data.polygons)
-        drawPolygon(context, polygon);
-      context.stroke ();
-    }
-
-    let distances = document.getElementById("distances");
-    let beeline_start = document.getElementById("beeline_start");
-    if (distances.checked && beeline_start.value in city_data.data)
-    {
-      context.lineWidth = 0.5;
-      let color_distances = document.getElementById("color_distances");
-      context.strokeStyle = color_distances.value;
-      let city_coord = city_data.data[beeline_start.value];
-      let city_trafo = new Transformator();
-      city_trafo.setRotMat(matMulMat(getRotMatY(city_coord.a), getRotMatX(-city_coord.b)));
-      context.beginPath();
-      for (const polygon of distance_data.polygons)
-      {
-        let trafo_poly = polygon.map(function(pt_xyz){ return city_trafo.transformPoint(pt_xyz); });
-        drawPolygon(context, trafo_poly);
-      }
-      context.stroke();
-    }
-
-    let beeline_end = document.getElementById("beeline_end");
-    if (beeline_start.value in city_data.data && beeline_end.value in city_data.data)
-    {
-      let gcsd = getGreatCircleSegmentData(city_data.data[beeline_start.value], city_data.data[beeline_end.value]);
-      let step_width = Math.PI / 180.0;
-      let polygon = [];
-      for (let beta = 0.0; beta <= gcsd.phi; beta += step_width)
-        polygon.push(getGreatCircleSegmentPoint(gcsd, beta));
-      context.lineWidth = 1.0;
-      let color_beeline = document.getElementById("color_beeline");
-      context.strokeStyle = color_beeline.value;
-      context.beginPath ();
+  let graticule = renderer.frame.getElementsByClassName("graticule")[0];
+  if (graticule.checked)
+  {
+    context.lineWidth = 0.5;
+    let color_graticule = renderer.frame.getElementsByClassName("color_graticule")[0];
+    context.strokeStyle = color_graticule.value;
+    context.beginPath ();
+    for (const polygon of graticule_data.polygons)
       drawPolygon(context, polygon);
-      context.stroke ();
+    context.stroke ();
+  }
+
+  let boundaries = renderer.frame.getElementsByClassName("boundaries")[0];
+  if (boundaries.checked)
+  {
+    context.lineWidth = 1;
+    let color_boundaries = renderer.frame.getElementsByClassName("color_boundaries")[0];
+    context.strokeStyle = color_boundaries.value;
+    context.beginPath ();
+    for (const polygon of map_data.polygons)
+      drawPolygon(context, polygon);
+    context.stroke ();
+  }
+
+  let distances = renderer.frame.getElementsByClassName("distances")[0];
+  let beeline_start = renderer.frame.getElementsByClassName("beeline_start")[0];
+  if (distances.checked && beeline_start.value in city_data.data)
+  {
+    context.lineWidth = 0.5;
+    let color_distances = renderer.frame.getElementsByClassName("color_distances")[0];
+    context.strokeStyle = color_distances.value;
+    let city_coord = city_data.data[beeline_start.value];
+    let city_trafo = new Transformator();
+    city_trafo.setRotMat(matMulMat(getRotMatY(city_coord.a), getRotMatX(-city_coord.b)));
+    context.beginPath();
+    for (const polygon of distance_data.polygons)
+    {
+      let trafo_poly = polygon.map(function(pt_xyz){ return city_trafo.transformPoint(pt_xyz); });
+      drawPolygon(context, trafo_poly);
     }
+    context.stroke();
+  }
+
+  let beeline_end = renderer.frame.getElementsByClassName("beeline_end")[0];
+  if (beeline_start.value in city_data.data && beeline_end.value in city_data.data)
+  {
+    let gcsd = getGreatCircleSegmentData(city_data.data[beeline_start.value], city_data.data[beeline_end.value]);
+    let step_width = Math.PI / 180.0;
+    let polygon = [];
+    for (let beta = 0.0; beta <= gcsd.phi; beta += step_width)
+      polygon.push(getGreatCircleSegmentPoint(gcsd, beta));
+    context.lineWidth = 1.0;
+    let color_beeline = renderer.frame.getElementsByClassName("color_beeline")[0];
+    context.strokeStyle = color_beeline.value;
+    context.beginPath ();
+    drawPolygon(context, polygon);
+    context.stroke ();
   }
 }
 
@@ -793,16 +770,113 @@ function switchOverlay(event)
   if (event.target.checked)
   {
     // switch on
-    let map = document.getElementById("map");
+    let map = renderer.frame.getElementsByClassName("map")[0];
     background_image.image.src = map.toDataURL();
     background_image.image.addEventListener("load",
                                             function()
                                             {
                                               background_image.loaded = true;
-                                              resize_handler.catchResize();
+                                              renderer.handleResize();
                                             });
   }
 }
+
+class Renderer
+{
+  constructor()
+  {
+    this.initialized = false;
+    this.frame = document.createElement("div");
+    this.frame.className = "frame";
+
+    let map = document.createElement("canvas");
+    map.className = "map";
+    map.textContent = "Here a map should be shown in browsers which support HTML5.";
+    this.frame.appendChild(map);
+
+    let user_input = document.createElement("div");
+    user_input.className = "user_input";
+    user_input.innerHTML = '<label for="overlay">Overlay</label> \
+    <input type="checkbox" id="overlay" class="overlay" /> \
+    <label for="overlay_alpha">Opacity</label> \
+    <input type="range" id="overlay_alpha" class="overlay_alpha" min="0" max="255" value="128" /> \
+    <br /> \
+    <label for="select_image">Background image</label> \
+    <select id="select_image" class="select_image"> \
+    </select> \
+    <br /> \
+    <label for="boundaries">Boundaries</label> \
+    <input type="checkbox" id="boundaries" class="boundaries" checked /> \
+    <input type="color" id="color_boundaries" class="color_boundaries" value="#bbbbbb" /> \
+    <br /> \
+    <label for="graticule">Graticule</label> \
+    <input type="checkbox" id="graticule" class="graticule" checked /> \
+    <input type="color" id="color_graticule" class="color_graticule" value="#888888" /> \
+    <br /> \
+    Beeline<br /> \
+    <label for="beeline_start">From</label> \
+    <input type="text" id="beeline_start" class="beeline_start" list="beeline_list" size="10" /> \
+    <datalist id="beeline_list" class="beeline_list"></datalist> \
+    <input type="button" id="center_start" class="center_start" value="Center" /> \
+    <br /> \
+    <label for="distances">Distances</label> \
+    <input type="checkbox" id="distances" class="distances" checked /> \
+    <input type="color" id="color_distances" class="color_distances" value="#bb0000" /> \
+    <br /> \
+    <label for="beeline_end">To</label> \
+    <input type="text" id="beeline_end" class="beeline_end" list="beeline_list" size="10" /> \
+    <br /> \
+    <input type="color" id="color_beeline" class="color_beeline" value="#ff0000" /> \
+    <input type="button" id="center_beeline" class="center_beeline" value="Center" /> \
+    <br /> \
+    <input type="button" id="reset_trafo" class="reset_trafo" value="Reset Trafo" /> \
+    <br /> \
+    <label for="select_projection">Projection</label> \
+    <select id="select_projection" class="select_projection"> \
+    </select>';
+    this.frame.appendChild(user_input);
+
+    this.handleResize();
+  }
+
+  isDataLoaded()
+  {
+    return map_data.loaded && graticule_data.loaded &&
+           city_data.loaded && distance_data.loaded &&
+           image_datas.every(image_data => {return image_data.loaded;});
+  }
+
+  handleResize()
+  {
+    let body = document.getElementsByTagName("body")[0];
+    let style = window.getComputedStyle(body, null);
+    const mt = parseFloat(style.marginTop);
+    const mb = parseFloat(style.marginBottom);
+    const pt = parseFloat(style.paddingTop);
+    const pb = parseFloat(style.paddingBottom);
+    let html = document.getElementsByTagName("html")[0];
+    this.frame.style.width = (body.clientWidth - 2) + "px";
+    this.frame.style.height = (html.clientHeight - mt - mb - pt - pb - 2) + "px";
+    this.renderFast();
+  }
+
+  renderFast()
+  {
+    if (this.isDataLoaded())
+    {
+      drawPolygons();
+
+      if (!this.initialized)
+      {
+        let loading = document.getElementById("loading");
+        loading.parentNode.replaceChild(this.frame, loading);
+        this.initialized = true;
+      }
+    }
+  }
+}
+
+var renderer = new Renderer();
 
 window.onload = function()
 {
@@ -812,7 +886,7 @@ window.onload = function()
   createDistanceData();
   image_datas.forEach(function(image_data){loadImageData(image_data)});
 
-  let select_projection = document.getElementById("select_projection");
+  let select_projection = renderer.frame.getElementsByClassName("select_projection")[0];
   for (const projector of projectors)
   {
     let option = document.createElement("option");
@@ -822,57 +896,56 @@ window.onload = function()
     select_projection.appendChild(option);
   }
 
-  let frame = document.getElementById("frame");
-  frame.onmousedown = mouse_tracker.catchDown;
-  frame.onmouseup = mouse_tracker.catchUp;
-  frame.onmouseleave = mouse_tracker.catchUp;
-  frame.onmousemove = mouse_tracker.catchMove;
-  frame.onwheel = mouse_tracker.catchWheel;
-  frame.ontouchstart = mouse_tracker.catchDown;
-  frame.ontouchend = mouse_tracker.catchUp;
-  frame.ontouchcancel = mouse_tracker.catchUp;
-  frame.ontouchmove = mouse_tracker.catchMove;
-  window.onresize = resize_handler.catchResize;
-  let overlay = document.getElementById("overlay");
+  renderer.frame.onmousedown = mouse_tracker.catchDown;
+  renderer.frame.onmouseup = mouse_tracker.catchUp;
+  renderer.frame.onmouseleave = mouse_tracker.catchUp;
+  renderer.frame.onmousemove = mouse_tracker.catchMove;
+  renderer.frame.onwheel = mouse_tracker.catchWheel;
+  renderer.frame.ontouchstart = mouse_tracker.catchDown;
+  renderer.frame.ontouchend = mouse_tracker.catchUp;
+  renderer.frame.ontouchcancel = mouse_tracker.catchUp;
+  renderer.frame.ontouchmove = mouse_tracker.catchMove;
+  window.onresize = renderer.handleResize;
+  let overlay = renderer.frame.getElementsByClassName("overlay")[0];
   overlay.onchange = switchOverlay;
-  let overlay_alpha = document.getElementById("overlay_alpha");
+  let overlay_alpha = renderer.frame.getElementsByClassName("overlay_alpha")[0];
   overlay_alpha.onmousedown = function(event){event.cancelBubble = true;};
-  let select_image = document.getElementById("select_image");
-  select_image.onchange = resize_handler.catchResize;
-  let boundaries = document.getElementById("boundaries");
-  boundaries.onchange = resize_handler.catchResize;
-  let color_boundaries = document.getElementById("color_boundaries");
-  color_boundaries.onchange = resize_handler.catchResize;
-  let graticule = document.getElementById("graticule");
-  graticule.onchange = resize_handler.catchResize;
-  let color_graticule = document.getElementById("color_graticule");
-  color_graticule.onchange = resize_handler.catchResize;
-  let distances = document.getElementById("distances");
-  distances.onchange = resize_handler.catchResize;
-  let color_distances = document.getElementById("color_distances");
-  color_distances.onchange = resize_handler.catchResize;
-  let beeline_start = document.getElementById("beeline_start");
+  let select_image = renderer.frame.getElementsByClassName("select_image")[0];
+  select_image.onchange = renderer.handleResize;
+  let boundaries = renderer.frame.getElementsByClassName("boundaries")[0];
+  boundaries.onchange = renderer.handleResize;
+  let color_boundaries = renderer.frame.getElementsByClassName("color_boundaries")[0];
+  color_boundaries.onchange = renderer.handleResize;
+  let graticule = renderer.frame.getElementsByClassName("graticule")[0];
+  graticule.onchange = renderer.handleResize;
+  let color_graticule = renderer.frame.getElementsByClassName("color_graticule")[0];
+  color_graticule.onchange = renderer.handleResize;
+  let distances = renderer.frame.getElementsByClassName("distances")[0];
+  distances.onchange = renderer.handleResize;
+  let color_distances = renderer.frame.getElementsByClassName("color_distances")[0];
+  color_distances.onchange = renderer.handleResize;
+  let beeline_start = renderer.frame.getElementsByClassName("beeline_start")[0];
   beeline_start.oninput = checkCityName;
-  let center_start = document.getElementById("center_start");
+  let center_start = renderer.frame.getElementsByClassName("center_start")[0];
   center_start.onclick = function()
                          {
-                           let city = document.getElementById("beeline_start").value;
+                           let city = renderer.frame.getElementsByClassName("beeline_start")[0].value;
                            if (city in city_data.data)
                            {
                             let city_coord = city_data.data[city];
                             transformator.setRotMat(matMulMat(getRotMatX(city_coord.b), getRotMatY(-city_coord.a)));
-                            resize_handler.catchResize();
+                            renderer.handleResize();
                            }
                          };
-  let beeline_end = document.getElementById("beeline_end");
+  let beeline_end = renderer.frame.getElementsByClassName("beeline_end")[0];
   beeline_end.oninput = checkCityName;
-  let color_beeline = document.getElementById("color_beeline");
-  color_beeline.onchange = resize_handler.catchResize;
-  let center_beeline = document.getElementById("center_beeline");
+  let color_beeline = renderer.frame.getElementsByClassName("color_beeline")[0];
+  color_beeline.onchange = renderer.handleResize;
+  let center_beeline = renderer.frame.getElementsByClassName("center_beeline")[0];
   center_beeline.onclick = function()
                            {
-                            let start = document.getElementById("beeline_start").value;
-                            let end = document.getElementById("beeline_end").value;
+                            let start = renderer.frame.getElementsByClassName("beeline_start")[0].value;
+                            let end = renderer.frame.getElementsByClassName("beeline_end")[0].value;
                             if (start in city_data.data && end in city_data.data)
                             {
                               let gcsd = getGreatCircleSegmentData(city_data.data[start], city_data.data[end]);
@@ -880,14 +953,14 @@ window.onload = function()
                               transformator.setRotMat(matMulMat(getRotMatX(pt_mid.b), getRotMatY(-pt_mid.a)));
                               let bnorm = transformator.transformPoint(ptCrossPt(gcsd.pt_1, gcsd.pt_h));
                               transformator.setRotMat(matMulMat(getRotMatZ(Math.PI / 2 - Math.atan2(bnorm.y, bnorm.x)), transformator.getRotMat()));
-                              resize_handler.catchResize();
+                              renderer.handleResize();
                             }
                            };
-  let reset_trafo = document.getElementById("reset_trafo");
+  let reset_trafo = renderer.frame.getElementsByClassName("reset_trafo")[0];
   reset_trafo.onclick = function()
                         {
                           transformator.setRotMat(I);
-                          resize_handler.catchResize();
+                          renderer.handleResize();
                         };
-  select_projection.onchange = resize_handler.catchResize;
+  select_projection.onchange = renderer.handleResize;
 }

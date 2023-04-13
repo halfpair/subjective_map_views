@@ -4,54 +4,18 @@
     <meta charset="utf-8" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="stylesheet" type="text/css" href="style.css" />
-    <script type="text/javascript" src="./main.js"></script>
     <title>Subjective Map Views</title>
   </head>
   <body>
-    <div id="frame">
-      <canvas id="map">
-        Here a map should be shown in browsers which support HTML5.
-      </canvas>
-      <div id="user_input">
-        <label for="overlay">Overlay</label>
-        <input type="checkbox" id="overlay" />
-        <label for="overlay_alpha">Opacity</label>
-        <input type="range" id="overlay_alpha" min="0" max="255" value="128" />
-        <br />
-        <label for="select_image">Background image</label>
-        <select id="select_image">
-        </select>
-        <br />
-        <label for="boundaries">Boundaries</label>
-        <input type="checkbox" id="boundaries" checked />
-        <input type="color" id="color_boundaries" value="#bbbbbb" />
-        <br />
-        <label for="graticule">Graticule</label>
-        <input type="checkbox" id="graticule" checked />
-        <input type="color" id="color_graticule" value="#888888" />
-        <br />
-        Beeline<br />
-        <label for="beeline_start">From</label>
-        <input type="text" id="beeline_start" class="city_input" list="beeline_list" size="10" />
-        <datalist id="beeline_list"></datalist>
-        <input type="button" id="center_start" class="trafo_button" value="Center" />
-        <br />
-        <label for="distances">Distances</label>
-        <input type="checkbox" id="distances" checked />
-        <input type="color" id="color_distances" value="#bb0000" />
-        <br />
-        <label for="beeline_end">To</label>
-        <input type="text" id="beeline_end" class="city_input" list="beeline_list" size="10" />
-        <br />
-        <input type="color" id="color_beeline" value="#ff0000" />
-        <input type="button" id="center_beeline" class="trafo_button" value="Center" />
-        <br />
-        <input type="button" id="reset_trafo" class="trafo_button" value="Reset Trafo" />
-        <br />
-        <label for="select_projection">Projection</label>
-        <select id="select_projection">
-        </select>
-      </div>
+    <div id="loading" class="center">
+      <img src="./loading.gif" alt="Loading..." />
+      <p style="color: #414141;">Loading...</p>
     </div>
+    <script>
+      let html = document.getElementsByTagName("html")[0];
+      let loading = document.getElementById("loading");
+      loading.style.height = (html.clientHeight - 32) + "px";
+    </script>
+    <script type="text/javascript" src="./main.js"></script>
   </body>
 </html>
