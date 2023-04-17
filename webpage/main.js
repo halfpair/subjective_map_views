@@ -23,7 +23,7 @@ function loadJsonData (src_url, converter, data)
       converter (json_data, data);
     }
     data.loaded = true;
-    renderer.handleResize();
+    renderer.renderFast();
   };
   request.send (null);
 }
@@ -46,7 +46,7 @@ function loadImageData(image_data)
         load_context.drawImage(img, 0, 0);
         image_data.data = load_context.getImageData(0,0, img.width, img.height);
         image_data.loaded = true;
-        renderer.handleResize();
+        renderer.renderFast();
       });
   }
   else
@@ -124,7 +124,7 @@ function checkCityName(event)
   if (event.target.value in city_data.data)
   {
     event.target.style.backgroundColor = "transparent";
-    renderer.handleResize();
+    renderer.renderFast();
   }
   else
   {
@@ -243,6 +243,7 @@ class MapData
 }
 
 var map_data = new MapData();
+var map_data_fine = new MapData();
 
 var graticule_data = new MapData();
 
@@ -297,7 +298,6 @@ class BaseProjector
   offset = {x: 0, y: 0};
   width = 128;
   height = 64;
-  speedup_level = 1;
   frame_color = "#101010";
   background_color = "#FFFFFF";
 
@@ -340,32 +340,22 @@ class BaseProjector
     context.fillRect(this.offset.x, this.offset.y, this.draw_width, this.draw_width / this.side_ratio);
   }
 
-  setSpeedupLevel(level)
-  {
-    let speedup_level = parseInt(level);
-    if (speedup_level < 1)
-      this.speedup_level = 1;
-    else if (speedup_level > 4)
-      this.speedup_level = 4;
-    else
-      this.speedup_level = speedup_level;
-  }
-
-  drawPixelMap(context, image_data)
+  drawPixelMap(context, image_data, reduced)
   {
     if (image_data === null)
       return;
-    let bgclr = [parseInt(this.frame_color.substr(1, 2), 16),
-                 parseInt(this.frame_color.substr(3, 2), 16),
-                 parseInt(this.frame_color.substr(5, 2), 16),
+    let bgclr = [parseInt(this.frame_color.slice(1, 3), 16),
+                 parseInt(this.frame_color.slice(3, 5), 16),
+                 parseInt(this.frame_color.slice(5, 7), 16),
                  255];
     let interp_data = new ImageData(this.draw_width, this.draw_width / this.side_ratio);
     let fx = image_data.width / 2.0 / Math.PI;
     let fy = image_data.height / Math.PI;
-    for (let y = 0, yn = interp_data.height; y < yn; y += this.speedup_level)
+    let speedup_level = reduced ? 4 : 1;
+    for (let y = 0, yn = interp_data.height; y < yn; y += speedup_level)
     {
       let yo = y * interp_data.width * 4;
-      for (let x = 0, xn = interp_data.width; x < xn; x += this.speedup_level)
+      for (let x = 0, xn = interp_data.width; x < xn; x += speedup_level)
       {
         let xo = x * 4;
         let pt_ab = projector.backProjectPoint({x: x + projector.offset.x, y: y + projector.offset.y});
@@ -382,8 +372,8 @@ class BaseProjector
         for (let c = 0; c < 4; c++)
         {
           let v = is_invalid ? bgclr[c] : image_data.data[yi + xi + c];
-          for (let ly = 0; ly < this.speedup_level; ly++)
-            for (let lx = 0; lx < this.speedup_level; lx++)
+          for (let ly = 0; ly < speedup_level; ly++)
+            for (let lx = 0; lx < speedup_level; lx++)
               interp_data.data[yo + interp_data.width * 4 * ly + xo + c + 4 * lx] = v;
         }
       }
@@ -625,10 +615,7 @@ function MouseTracker ()
           transformator.setRotMat(matMulMat(matMulMat(getRotMatX(this.down_pos.b - cur_pos.b), getRotMatY(cur_pos.a - this.down_pos.a)), this.rot_mat));
         }
       }
-      let t0 = performance.now();
-      drawPolygons ();
-      if (performance.now() - t0 > 200)
-        projector.setSpeedupLevel(projector.speedup_level + 1);
+      renderer.renderFast();
     }
   }
 
@@ -637,15 +624,14 @@ function MouseTracker ()
     event.returnValue = false;
     const a = event.deltaY > 0 ? 1.0 : -1.0;
     transformator.setRotMat(matMulMat(getRotMatZ(a * Math.PI / 20.0), transformator.getRotMat()));
-    drawPolygons ();
+    renderer.renderFast();
   }
 
   this.catchUp = function (event)
   {
     this.down = false;
     this.rotation = false;
-    projector.setSpeedupLevel(1);
-    drawPolygons();
+    renderer.renderFast();
   }
 }
 
@@ -662,106 +648,22 @@ class BackGroundImage
 
 var background_image = new BackGroundImage();
 
-function drawPolygon (context, polygon)
+function drawPolygon(context, polygon, reduced)
 {
-  let pts_ab = polygon.map (function (pt_xyz) { return xyz2ab (transformator.transformPoint(pt_xyz)); });
+  let speedup_level = reduced ? 5 : 1;
+  let pts_ab = polygon.filter((v, idx) => { return idx % speedup_level == 0; }).map(function(pt_xyz) { return xyz2ab(transformator.transformPoint(pt_xyz)); });
   let cuts = [];
   for (let i = 0, n = pts_ab.length - 1; i < n; i++)
-    if (projector.suppressLine (pts_ab[i], pts_ab[i + 1]))
-      cuts.push (i);
-  let pts_xy = pts_ab.map (function (pt_ab) { return projector.projectPoint (pt_ab); });
-  context.moveTo (pts_xy[0].x, pts_xy[0].y);
+    if (projector.suppressLine(pts_ab[i], pts_ab[i + 1]))
+      cuts.push(i);
+  let pts_xy = pts_ab.map((pt_ab) => { return projector.projectPoint(pt_ab); });
+  context.moveTo(pts_xy[0].x, pts_xy[0].y);
   for (let i = 1, n = pts_xy.length; i < n; i++)
   {
-    if (cuts.indexOf (i - 1) > -1)
-      context.moveTo (pts_xy[i].x, pts_xy[i].y);
+    if (cuts.indexOf(i - 1) > -1)
+      context.moveTo(pts_xy[i].x, pts_xy[i].y);
     else
-      context.lineTo (pts_xy[i].x, pts_xy[i].y);
-  }
-}
-
-function drawPolygons ()
-{
-  let map = renderer.frame.getElementsByClassName("map")[0];
-  map.width = parseInt(renderer.frame.style.width);
-  map.height = parseInt(renderer.frame.style.height);
-  let select_projection = renderer.frame.getElementsByClassName("select_projection")[0];
-  projector = projectors.filter(function(prj){return prj.key == select_projection.value;})[0];
-  projector.setSize (map.width, map.height);
-  let context = map.getContext ("2d");
-
-  projector.drawPassepartout (context);
-
-  let select_image = renderer.frame.getElementsByClassName("select_image")[0];
-  projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data);
-
-  let overlay = renderer.frame.getElementsByClassName("overlay")[0];
-  if (overlay.checked && background_image.loaded)
-  {
-    let overlay_alpha = renderer.frame.getElementsByClassName("overlay_alpha")[0];
-    let alpha = overlay_alpha.value / 255.0;
-    context.globalAlpha = 1.0 - alpha;
-    context.drawImage(background_image.image, 0, 0, map.width, map.height);
-    context.globalAlpha = alpha;
-  }
-
-  let graticule = renderer.frame.getElementsByClassName("graticule")[0];
-  if (graticule.checked)
-  {
-    context.lineWidth = 0.5;
-    let color_graticule = renderer.frame.getElementsByClassName("color_graticule")[0];
-    context.strokeStyle = color_graticule.value;
-    context.beginPath ();
-    for (const polygon of graticule_data.polygons)
-      drawPolygon(context, polygon);
-    context.stroke ();
-  }
-
-  let boundaries = renderer.frame.getElementsByClassName("boundaries")[0];
-  if (boundaries.checked)
-  {
-    context.lineWidth = 1;
-    let color_boundaries = renderer.frame.getElementsByClassName("color_boundaries")[0];
-    context.strokeStyle = color_boundaries.value;
-    context.beginPath ();
-    for (const polygon of map_data.polygons)
-      drawPolygon(context, polygon);
-    context.stroke ();
-  }
-
-  let distances = renderer.frame.getElementsByClassName("distances")[0];
-  let beeline_start = renderer.frame.getElementsByClassName("beeline_start")[0];
-  if (distances.checked && beeline_start.value in city_data.data)
-  {
-    context.lineWidth = 0.5;
-    let color_distances = renderer.frame.getElementsByClassName("color_distances")[0];
-    context.strokeStyle = color_distances.value;
-    let city_coord = city_data.data[beeline_start.value];
-    let city_trafo = new Transformator();
-    city_trafo.setRotMat(matMulMat(getRotMatY(city_coord.a), getRotMatX(-city_coord.b)));
-    context.beginPath();
-    for (const polygon of distance_data.polygons)
-    {
-      let trafo_poly = polygon.map(function(pt_xyz){ return city_trafo.transformPoint(pt_xyz); });
-      drawPolygon(context, trafo_poly);
-    }
-    context.stroke();
-  }
-
-  let beeline_end = renderer.frame.getElementsByClassName("beeline_end")[0];
-  if (beeline_start.value in city_data.data && beeline_end.value in city_data.data)
-  {
-    let gcsd = getGreatCircleSegmentData(city_data.data[beeline_start.value], city_data.data[beeline_end.value]);
-    let step_width = Math.PI / 180.0;
-    let polygon = [];
-    for (let beta = 0.0; beta <= gcsd.phi; beta += step_width)
-      polygon.push(getGreatCircleSegmentPoint(gcsd, beta));
-    context.lineWidth = 1.0;
-    let color_beeline = renderer.frame.getElementsByClassName("color_beeline")[0];
-    context.strokeStyle = color_beeline.value;
-    context.beginPath ();
-    drawPolygon(context, polygon);
-    context.stroke ();
+      context.lineTo(pts_xy[i].x, pts_xy[i].y);
   }
 }
 
@@ -776,16 +678,21 @@ function switchOverlay(event)
                                             function()
                                             {
                                               background_image.loaded = true;
-                                              renderer.handleResize();
+                                              renderer.renderFast();
                                             });
   }
 }
 
 class Renderer
 {
+  initialized;
+  timeout;
+  frame;
+
   constructor()
   {
     this.initialized = false;
+    this.timeout = undefined;
     this.frame = document.createElement("div");
     this.frame.className = "frame";
 
@@ -841,8 +748,8 @@ class Renderer
 
   isDataLoaded()
   {
-    return map_data.loaded && graticule_data.loaded &&
-           city_data.loaded && distance_data.loaded &&
+    return map_data.loaded && map_data_fine.loaded &&
+           graticule_data.loaded && city_data.loaded && distance_data.loaded &&
            image_datas.every(image_data => {return image_data.loaded;});
   }
 
@@ -864,7 +771,10 @@ class Renderer
   {
     if (this.isDataLoaded())
     {
-      drawPolygons();
+      if (this.timeout)
+        clearTimeout(this.timeout);
+      
+      this.render(true);
 
       if (!this.initialized)
       {
@@ -872,6 +782,105 @@ class Renderer
         loading.parentNode.replaceChild(this.frame, loading);
         this.initialized = true;
       }
+
+      this.timeout = setTimeout(function() { renderer.renderAll(); }, 1000);
+    }
+  }
+
+  renderAll()
+  {
+    if (this.isDataLoaded())
+      this.render(false);
+  }
+
+  render(reduced)
+  {
+    let map = this.frame.getElementsByClassName("map")[0];
+    map.width = parseInt(this.frame.style.width);
+    map.height = parseInt(this.frame.style.height);
+    let select_projection = this.frame.getElementsByClassName("select_projection")[0];
+    projector = projectors.filter((prj) => { return prj.key == select_projection.value; })[0];
+    projector.setSize(map.width, map.height);
+    let context = map.getContext("2d");
+  
+    projector.drawPassepartout(context);
+  
+    let select_image = this.frame.getElementsByClassName("select_image")[0];
+    projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data, reduced);
+  
+    let overlay = renderer.frame.getElementsByClassName("overlay")[0];
+    if (overlay.checked && background_image.loaded)
+    {
+      let overlay_alpha = renderer.frame.getElementsByClassName("overlay_alpha")[0];
+      let alpha = overlay_alpha.value / 255.0;
+      context.globalAlpha = 1.0 - alpha;
+      context.drawImage(background_image.image, 0, 0, map.width, map.height);
+      context.globalAlpha = alpha;
+    }
+  
+    let graticule = renderer.frame.getElementsByClassName("graticule")[0];
+    if (graticule.checked)
+    {
+      context.lineWidth = 0.5;
+      let color_graticule = renderer.frame.getElementsByClassName("color_graticule")[0];
+      context.strokeStyle = color_graticule.value;
+      context.beginPath();
+      for (const polygon of graticule_data.polygons)
+        drawPolygon(context, polygon, reduced);
+      context.stroke();
+    }
+  
+    let boundaries = renderer.frame.getElementsByClassName("boundaries")[0];
+    if (boundaries.checked)
+    {
+      context.lineWidth = 1;
+      let color_boundaries = renderer.frame.getElementsByClassName("color_boundaries")[0];
+      context.strokeStyle = color_boundaries.value;
+      context.beginPath();
+      if (reduced)
+        for (const polygon of map_data.polygons)
+          drawPolygon(context, polygon, false);
+      else
+        for (const polygon of map_data_fine.polygons)
+          drawPolygon(context, polygon, false);
+      context.stroke ();
+    }
+  
+    let distances = renderer.frame.getElementsByClassName("distances")[0];
+    let beeline_start = renderer.frame.getElementsByClassName("beeline_start")[0];
+    if (distances.checked && beeline_start.value in city_data.data)
+    {
+      context.lineWidth = 0.5;
+      let color_distances = renderer.frame.getElementsByClassName("color_distances")[0];
+      context.strokeStyle = color_distances.value;
+      let city_coord = city_data.data[beeline_start.value];
+      let city_trafo = new Transformator();
+      city_trafo.setRotMat(matMulMat(getRotMatY(city_coord.a), getRotMatX(-city_coord.b)));
+      context.beginPath();
+      let speedup_level = reduced ? 5 : 1;
+      for (const polygon of distance_data.polygons)
+      {
+        let trafo_poly = polygon.filter((v, idx) => { return idx % speedup_level == 0; }).map(function(pt_xyz){ return city_trafo.transformPoint(pt_xyz); });
+        drawPolygon(context, trafo_poly, false);
+      }
+      context.stroke();
+    }
+  
+    let beeline_end = renderer.frame.getElementsByClassName("beeline_end")[0];
+    if (beeline_start.value in city_data.data && beeline_end.value in city_data.data)
+    {
+      let gcsd = getGreatCircleSegmentData(city_data.data[beeline_start.value], city_data.data[beeline_end.value]);
+      let step_width = Math.PI / 180.0;
+      step_width *= reduced ? 5 : 1;
+      let polygon = [];
+      for (let beta = 0.0; beta <= gcsd.phi; beta += step_width)
+        polygon.push(getGreatCircleSegmentPoint(gcsd, beta));
+      context.lineWidth = 1.0;
+      let color_beeline = renderer.frame.getElementsByClassName("color_beeline")[0];
+      context.strokeStyle = color_beeline.value;
+      context.beginPath();
+      drawPolygon(context, polygon, false);
+      context.stroke();
     }
   }
 }
@@ -881,6 +890,7 @@ var renderer = new Renderer();
 window.onload = function()
 {
   loadJsonData("./ne_110m_countries_red.json", json2MapData, map_data);
+  loadJsonData("./ne_50m_countries_red.json", json2MapData, map_data_fine);
   loadJsonData("./cities_red.json", json2CityData, city_data);
   createGraticuleData();
   createDistanceData();
@@ -905,25 +915,25 @@ window.onload = function()
   renderer.frame.ontouchend = mouse_tracker.catchUp;
   renderer.frame.ontouchcancel = mouse_tracker.catchUp;
   renderer.frame.ontouchmove = mouse_tracker.catchMove;
-  window.onresize = renderer.handleResize;
+  window.onresize = function() { renderer.handleResize(); };
   let overlay = renderer.frame.getElementsByClassName("overlay")[0];
   overlay.onchange = switchOverlay;
   let overlay_alpha = renderer.frame.getElementsByClassName("overlay_alpha")[0];
   overlay_alpha.onmousedown = function(event){event.cancelBubble = true;};
   let select_image = renderer.frame.getElementsByClassName("select_image")[0];
-  select_image.onchange = renderer.handleResize;
+  select_image.onchange = function() { renderer.renderFast(); };
   let boundaries = renderer.frame.getElementsByClassName("boundaries")[0];
-  boundaries.onchange = renderer.handleResize;
+  boundaries.onchange = function() { renderer.renderFast(); };
   let color_boundaries = renderer.frame.getElementsByClassName("color_boundaries")[0];
-  color_boundaries.onchange = renderer.handleResize;
+  color_boundaries.onchange = function() { renderer.renderFast(); };
   let graticule = renderer.frame.getElementsByClassName("graticule")[0];
-  graticule.onchange = renderer.handleResize;
+  graticule.onchange = function() { renderer.renderFast(); };
   let color_graticule = renderer.frame.getElementsByClassName("color_graticule")[0];
-  color_graticule.onchange = renderer.handleResize;
+  color_graticule.onchange = function() { renderer.renderFast(); };
   let distances = renderer.frame.getElementsByClassName("distances")[0];
-  distances.onchange = renderer.handleResize;
+  distances.onchange = function() { renderer.renderFast(); };
   let color_distances = renderer.frame.getElementsByClassName("color_distances")[0];
-  color_distances.onchange = renderer.handleResize;
+  color_distances.onchange = function() { renderer.renderFast(); };
   let beeline_start = renderer.frame.getElementsByClassName("beeline_start")[0];
   beeline_start.oninput = checkCityName;
   let center_start = renderer.frame.getElementsByClassName("center_start")[0];
@@ -934,13 +944,13 @@ window.onload = function()
                            {
                             let city_coord = city_data.data[city];
                             transformator.setRotMat(matMulMat(getRotMatX(city_coord.b), getRotMatY(-city_coord.a)));
-                            renderer.handleResize();
+                            renderer.renderFast();
                            }
                          };
   let beeline_end = renderer.frame.getElementsByClassName("beeline_end")[0];
   beeline_end.oninput = checkCityName;
   let color_beeline = renderer.frame.getElementsByClassName("color_beeline")[0];
-  color_beeline.onchange = renderer.handleResize;
+  color_beeline.onchange = function() { renderer.renderFast(); };
   let center_beeline = renderer.frame.getElementsByClassName("center_beeline")[0];
   center_beeline.onclick = function()
                            {
@@ -953,14 +963,14 @@ window.onload = function()
                               transformator.setRotMat(matMulMat(getRotMatX(pt_mid.b), getRotMatY(-pt_mid.a)));
                               let bnorm = transformator.transformPoint(ptCrossPt(gcsd.pt_1, gcsd.pt_h));
                               transformator.setRotMat(matMulMat(getRotMatZ(Math.PI / 2 - Math.atan2(bnorm.y, bnorm.x)), transformator.getRotMat()));
-                              renderer.handleResize();
+                              renderer.renderFast();
                             }
                            };
   let reset_trafo = renderer.frame.getElementsByClassName("reset_trafo")[0];
   reset_trafo.onclick = function()
                         {
                           transformator.setRotMat(I);
-                          renderer.handleResize();
+                          renderer.renderFast();
                         };
-  select_projection.onchange = renderer.handleResize;
+  select_projection.onchange = function() { renderer.renderFast(); };
 }
