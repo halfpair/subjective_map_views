@@ -8,17 +8,17 @@ There are a lot of 2D views of earth maps out there as icons, cliparts, art, dia
 
 # Usage
 
-The main tool is a small self-contained HTML5 web page in subfolder `webpage`. Because it uses HTTPRequests, it must run on a server and it **isn't** sufficient to load the `index.html` file in a browser.
+The main tool is a small self-contained HTML5 web page in folder `webpage`. Because it uses HTTPRequests, it must run on a server and it **isn't** sufficient to load the `index.html` file in a browser.
 
-## Internet
+## Online
 
 The most recent tag of this project is hosted on https://www.signodes.de/subjective_web_views/ and can be used there from any web browser.
 
-## Locally
+## Local
 
-You can run a local web server on the `webpage` subfolder of this project on your machine.
+You can run a local web server on the `webpage` folder of this project on your machine.
 
-If you have installed the Python programming language on your machine, you can start a command line, switch to the `webpage` subfolder of the download of this project and run
+If you have installed the Python programming language on your machine, you can start a command line, switch to the `webpage` folder of the download of this project and run
 
 ```
 python3 -m http.server 3000
@@ -28,16 +28,17 @@ Afterwards you can reach the tool on http://localhost:3000 on your machine from 
 
 # Content
 
-This project contains two main folders:
+This project contains this folder structure:
 
 * `tools`: Some helper scripts to generate data for the web tool. This folder is not needed to use the web tool.
 * `webpage`: The HTML5 web tool itself with all it's data. When this folder is hosted on a (local) server, it can be used from any web browser.
+  * `data`: The non-code content, images, and vector data for the HTML5 web tool.
 
 # License
 
 All source code of this project in `tools` and `webpage` is available under the [MIT License](webpage/LICENSE.txt).
 
-All vector data and images of this project in `webpage/data` is [public domain](webpage/data/LICENSE.txt) as the sources are provided by [Natural Earth](https://www.naturalearthdata.com/) and [NASA](https://visibleearth.nasa.gov).
+All vector data and images of this project in `webpage/data` is [public domain](webpage/data/LICENSE.txt) as the sources are provided by [Natural Earth](https://www.naturalearthdata.com/) and [NASA](https://visibleearth.nasa.gov) in the public domain, too.
 
 # Disclaimer
 

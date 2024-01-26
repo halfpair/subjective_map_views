@@ -284,9 +284,9 @@ function createDistanceData()
 }
 
 var image_datas = [{loaded: false, data: null, key: "none", name: "None", src: "", preselected: false},
-                   {loaded: false, data: null, key: "base", name: "Base", src: "./map_base.jpg", preselected: false},
-                   {loaded: false, data: null, key: "color", name: "Color", src: "./map_color.jpg", preselected: true},
-                   {loaded: false, data: null, key: "shape", name: "Shape", src: "./map_shape.png", preselected: false}];
+                   {loaded: false, data: null, key: "base", name: "Base", src: "./data/map_base.jpg", preselected: false},
+                   {loaded: false, data: null, key: "color", name: "Color", src: "./data/map_color.jpg", preselected: true},
+                   {loaded: false, data: null, key: "shape", name: "Shape", src: "./data/map_shape.png", preselected: false}];
 
 class BaseProjector
 {
@@ -889,9 +889,9 @@ var renderer = new Renderer();
 
 window.onload = function()
 {
-  loadJsonData("./ne_110m_countries_red.json", json2MapData, map_data);
-  loadJsonData("./ne_50m_countries_red.json", json2MapData, map_data_fine);
-  loadJsonData("./cities_red.json", json2CityData, city_data);
+  loadJsonData("./data/ne_110m_countries_red.json", json2MapData, map_data);
+  loadJsonData("./data/ne_50m_countries_red.json", json2MapData, map_data_fine);
+  loadJsonData("./data/cities_red.json", json2CityData, city_data);
   createGraticuleData();
   createDistanceData();
   image_datas.forEach(function(image_data){loadImageData(image_data)});
