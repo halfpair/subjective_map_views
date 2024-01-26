@@ -12,7 +12,7 @@ The main tool is a small self-contained HTML5 web page in folder `webpage`. Beca
 
 ## Online
 
-The most recent tag of this project is hosted on https://www.signodes.de/subjective_web_views/ and can be used there from any web browser.
+The most recent tag of this project is hosted on https://www.signodes.de/subjective_map_views/ and can be used there from any web browser.
 
 ## Local
 
