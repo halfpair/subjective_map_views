@@ -1,3 +1,5 @@
+import { initBuffers } from "./data_buffers.js";
+
 function ab2xyz (pt_ab)
 {
   return {x: Math.sin (pt_ab.a) * Math.cos (pt_ab.b),
@@ -19,7 +21,7 @@ function loadJsonData (src_url, converter, data)
   request.onreadystatechange = function () {
     if (request.readyState == 4 && request.status == "200")
     {
-      json_data = JSON.parse (request.responseText);
+      let json_data = JSON.parse (request.responseText);
       converter (json_data, data);
     }
     data.loaded = true;
@@ -275,7 +277,7 @@ function createDistanceData()
     let a = i * Math.PI / 180.0;
     for (let j = 0, nj = 360; j <= nj; j++)
     {
-      b = j * Math.PI / 180.0;
+      let b = j * Math.PI / 180.0;
       ring.push({x: Math.sin(a) * Math.cos(b), y: Math.sin(a) * Math.sin(b), z: Math.cos(a)});
     }
     distance_data.polygons.push(ring);
@@ -795,99 +797,99 @@ class Renderer
 
   render(reduced)
   {
-    let map = this.frame.getElementsByClassName("map")[0];
-    map.width = parseInt(this.frame.style.width);
-    map.height = parseInt(this.frame.style.height);
-    let select_projection = this.frame.getElementsByClassName("select_projection")[0];
-    projector = projectors.filter((prj) => { return prj.key == select_projection.value; })[0];
-    projector.setSize(map.width, map.height);
-    let context = map.getContext("2d");
+    // let map = this.frame.getElementsByClassName("map")[0];
+    // map.width = parseInt(this.frame.style.width);
+    // map.height = parseInt(this.frame.style.height);
+    // let select_projection = this.frame.getElementsByClassName("select_projection")[0];
+    // projector = projectors.filter((prj) => { return prj.key == select_projection.value; })[0];
+    // projector.setSize(map.width, map.height);
+    // let context = map.getContext("2d");
   
-    projector.drawPassepartout(context);
+    // projector.drawPassepartout(context);
   
-    let select_image = this.frame.getElementsByClassName("select_image")[0];
-    projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data, reduced);
+    // let select_image = this.frame.getElementsByClassName("select_image")[0];
+    // projector.drawPixelMap(context, image_datas.filter(function(image_data){return image_data.key == select_image.value;})[0].data, reduced);
   
-    let overlay = renderer.frame.getElementsByClassName("overlay")[0];
-    if (overlay.checked && background_image.loaded)
-    {
-      let overlay_alpha = renderer.frame.getElementsByClassName("overlay_alpha")[0];
-      let alpha = overlay_alpha.value / 255.0;
-      context.globalAlpha = 1.0 - alpha;
-      context.drawImage(background_image.image, 0, 0, map.width, map.height);
-      context.globalAlpha = alpha;
-    }
+    // let overlay = renderer.frame.getElementsByClassName("overlay")[0];
+    // if (overlay.checked && background_image.loaded)
+    // {
+    //   let overlay_alpha = renderer.frame.getElementsByClassName("overlay_alpha")[0];
+    //   let alpha = overlay_alpha.value / 255.0;
+    //   context.globalAlpha = 1.0 - alpha;
+    //   context.drawImage(background_image.image, 0, 0, map.width, map.height);
+    //   context.globalAlpha = alpha;
+    // }
   
-    let graticule = renderer.frame.getElementsByClassName("graticule")[0];
-    if (graticule.checked)
-    {
-      context.lineWidth = 0.5;
-      let color_graticule = renderer.frame.getElementsByClassName("color_graticule")[0];
-      context.strokeStyle = color_graticule.value;
-      context.beginPath();
-      for (const polygon of graticule_data.polygons)
-        drawPolygon(context, polygon, reduced);
-      context.stroke();
-    }
+    // let graticule = renderer.frame.getElementsByClassName("graticule")[0];
+    // if (graticule.checked)
+    // {
+    //   context.lineWidth = 0.5;
+    //   let color_graticule = renderer.frame.getElementsByClassName("color_graticule")[0];
+    //   context.strokeStyle = color_graticule.value;
+    //   context.beginPath();
+    //   for (const polygon of graticule_data.polygons)
+    //     drawPolygon(context, polygon, reduced);
+    //   context.stroke();
+    // }
   
-    let boundaries = renderer.frame.getElementsByClassName("boundaries")[0];
-    if (boundaries.checked)
-    {
-      context.lineWidth = 1;
-      let color_boundaries = renderer.frame.getElementsByClassName("color_boundaries")[0];
-      context.strokeStyle = color_boundaries.value;
-      context.beginPath();
-      if (reduced)
-        for (const polygon of map_data.polygons)
-          drawPolygon(context, polygon, false);
-      else
-        for (const polygon of map_data_fine.polygons)
-          drawPolygon(context, polygon, false);
-      context.stroke ();
-    }
+    // let boundaries = renderer.frame.getElementsByClassName("boundaries")[0];
+    // if (boundaries.checked)
+    // {
+    //   context.lineWidth = 1;
+    //   let color_boundaries = renderer.frame.getElementsByClassName("color_boundaries")[0];
+    //   context.strokeStyle = color_boundaries.value;
+    //   context.beginPath();
+    //   if (reduced)
+    //     for (const polygon of map_data.polygons)
+    //       drawPolygon(context, polygon, false);
+    //   else
+    //     for (const polygon of map_data_fine.polygons)
+    //       drawPolygon(context, polygon, false);
+    //   context.stroke ();
+    // }
   
-    let distances = renderer.frame.getElementsByClassName("distances")[0];
-    let beeline_start = renderer.frame.getElementsByClassName("beeline_start")[0];
-    if (distances.checked && beeline_start.value in city_data.data)
-    {
-      context.lineWidth = 0.5;
-      let color_distances = renderer.frame.getElementsByClassName("color_distances")[0];
-      context.strokeStyle = color_distances.value;
-      let city_coord = city_data.data[beeline_start.value];
-      let city_trafo = new Transformator();
-      city_trafo.setRotMat(matMulMat(getRotMatY(city_coord.a), getRotMatX(-city_coord.b)));
-      context.beginPath();
-      let speedup_level = reduced ? 5 : 1;
-      for (const polygon of distance_data.polygons)
-      {
-        let trafo_poly = polygon.filter((v, idx) => { return idx % speedup_level == 0; }).map(function(pt_xyz){ return city_trafo.transformPoint(pt_xyz); });
-        drawPolygon(context, trafo_poly, false);
-      }
-      context.stroke();
-    }
+    // let distances = renderer.frame.getElementsByClassName("distances")[0];
+    // let beeline_start = renderer.frame.getElementsByClassName("beeline_start")[0];
+    // if (distances.checked && beeline_start.value in city_data.data)
+    // {
+    //   context.lineWidth = 0.5;
+    //   let color_distances = renderer.frame.getElementsByClassName("color_distances")[0];
+    //   context.strokeStyle = color_distances.value;
+    //   let city_coord = city_data.data[beeline_start.value];
+    //   let city_trafo = new Transformator();
+    //   city_trafo.setRotMat(matMulMat(getRotMatY(city_coord.a), getRotMatX(-city_coord.b)));
+    //   context.beginPath();
+    //   let speedup_level = reduced ? 5 : 1;
+    //   for (const polygon of distance_data.polygons)
+    //   {
+    //     let trafo_poly = polygon.filter((v, idx) => { return idx % speedup_level == 0; }).map(function(pt_xyz){ return city_trafo.transformPoint(pt_xyz); });
+    //     drawPolygon(context, trafo_poly, false);
+    //   }
+    //   context.stroke();
+    // }
   
-    let beeline_end = renderer.frame.getElementsByClassName("beeline_end")[0];
-    if (beeline_start.value in city_data.data && beeline_end.value in city_data.data)
-    {
-      let gcsd = getGreatCircleSegmentData(city_data.data[beeline_start.value], city_data.data[beeline_end.value]);
-      let step_width = Math.PI / 180.0;
-      step_width *= reduced ? 5 : 1;
-      let polygon = [];
-      for (let beta = 0.0; beta <= gcsd.phi; beta += step_width)
-        polygon.push(getGreatCircleSegmentPoint(gcsd, beta));
-      context.lineWidth = 1.0;
-      let color_beeline = renderer.frame.getElementsByClassName("color_beeline")[0];
-      context.strokeStyle = color_beeline.value;
-      context.beginPath();
-      drawPolygon(context, polygon, false);
-      context.stroke();
-    }
+    // let beeline_end = renderer.frame.getElementsByClassName("beeline_end")[0];
+    // if (beeline_start.value in city_data.data && beeline_end.value in city_data.data)
+    // {
+    //   let gcsd = getGreatCircleSegmentData(city_data.data[beeline_start.value], city_data.data[beeline_end.value]);
+    //   let step_width = Math.PI / 180.0;
+    //   step_width *= reduced ? 5 : 1;
+    //   let polygon = [];
+    //   for (let beta = 0.0; beta <= gcsd.phi; beta += step_width)
+    //     polygon.push(getGreatCircleSegmentPoint(gcsd, beta));
+    //   context.lineWidth = 1.0;
+    //   let color_beeline = renderer.frame.getElementsByClassName("color_beeline")[0];
+    //   context.strokeStyle = color_beeline.value;
+    //   context.beginPath();
+    //   drawPolygon(context, polygon, false);
+    //   context.stroke();
+    // }
   }
 }
 
 var renderer = new Renderer();
 
-window.onload = function()
+function runCanvasAPI()
 {
   loadJsonData("./data/ne_110m_countries_red.json", json2MapData, map_data);
   loadJsonData("./data/ne_50m_countries_red.json", json2MapData, map_data_fine);
@@ -974,3 +976,153 @@ window.onload = function()
                         };
   select_projection.onchange = function() { renderer.renderFast(); };
 }
+
+function initShaderProgram(webgl, vs_source, fs_source)
+{
+  const vertex_shader = loadShader(webgl, webgl.VERTEX_SHADER, vs_source);
+  const fragment_shader = loadShader(webgl, webgl.FRAGMENT_SHADER, fs_source);
+
+  const shader_program = webgl.createProgram();
+  webgl.attachShader(shader_program, vertex_shader);
+  webgl.attachShader(shader_program, fragment_shader);
+  webgl.linkProgram(shader_program);
+
+  if (!webgl.getProgramParameter(shader_program, webgl.LINK_STATUS))
+  {
+    alert(`Unable to initialize the shader program: ${webgl.getProgramInfoLog(shader_program)}`);
+    return null;
+  }
+
+  return shader_program;
+}
+
+function loadShader(webgl, type, source)
+{
+  const shader = webgl.createShader(type);
+  webgl.shaderSource(shader, source);
+  webgl.compileShader(shader);
+
+  if (!webgl.getShaderParameter(shader, webgl.COMPILE_STATUS))
+  {
+    alert(`An error occurred compiling the shaders: ${webgl.getShaderInfoLog(shader)}`);
+    webgl.deleteShader(shader);
+    return null;
+  }
+
+  return shader;
+}
+
+function drawScene(webgl, program_info, buffers)
+{
+  webgl.clearColor(1.0, 0.0, 0.0, 1.0);
+  webgl.clearDepth(1.0);
+  webgl.enable(webgl.DEPTH_TEST);
+  webgl.depthFunc(webgl.LEQUAL);
+
+  webgl.clear(webgl.COLOR_BUFFER_BIT | webgl.DEPTH_BUFFER_BIT);
+
+  // const fov = Math.PI / 4.0;
+  // const aspect = webgl.canvas.clientWidth / webgl.canvas.clientHeight;
+  // const projection_matrix = mat4.create();
+  // mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
+
+  // const modelViewMatrix = mat4.create();
+  // mat4.translate(
+  //   modelViewMatrix,
+  //   modelViewMatrix,
+  //   [-0.0, 0.0, -6.0],
+  // );
+
+  setPositionAttribute(webgl, buffers, program_info);
+
+  webgl.useProgram(program_info.program);
+
+  // webgl.uniformMatrix4fv(
+  //   program_info.uniformLocations.projectionMatrix,
+  //   false,
+  //   projection_matrix,
+  // );
+  // webgl.uniformMatrix4fv(
+  //   program_info.uniformLocations.modelViewMatrix,
+  //   false,
+  //   modelViewMatrix,
+  // );
+
+  {
+    const offset = 0;
+    const vertex_count = 4;
+    webgl.drawArrays(webgl.TRIANGLE_STRIP, offset, vertex_count);
+  }
+}
+
+function setPositionAttribute(webgl, buffers, program_info)
+{
+  const num_components = 2;
+  const type = webgl.FLOAT;
+  const normalize = false;
+  const stride = 0;
+  const offset = 0;
+  webgl.bindBuffer(webgl.ARRAY_BUFFER, buffers.position);
+  webgl.vertexAttribPointer(
+    program_info.attribLocations.vertexPosition,
+    num_components,
+    type,
+    normalize,
+    stride,
+    offset,
+  );
+  webgl.enableVertexAttribArray(program_info.attribLocations.vertexPosition);
+}
+
+function runWebGL()
+{
+  loadJsonData("./data/ne_110m_countries_red.json", json2MapData, map_data);
+  loadJsonData("./data/ne_50m_countries_red.json", json2MapData, map_data_fine);
+  loadJsonData("./data/cities_red.json", json2CityData, city_data);
+  createGraticuleData();
+  createDistanceData();
+  image_datas.forEach(function(image_data){loadImageData(image_data)});
+
+  let map = renderer.frame.getElementsByClassName("map")[0];
+  let webgl = map.getContext("webgl");
+  // webgl.clearColor(1.0, 0.0, 0.0, 1.0);
+  // webgl.clear(webgl.COLOR_BUFFER_BIT);
+
+  // const vs_source = `
+  //   attribute vec4 aVertexPosition;
+  //   uniform mat4 uModelViewMatrix;
+  //   uniform mat4 uProjectionMatrix;
+  //   void main() {
+  //     gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+  //   }
+  // `;
+  const vs_source = `
+    attribute vec4 aVertexPosition;
+    void main() {
+      gl_Position = aVertexPosition;
+    }
+  `;
+  const fs_source = `
+    void main() {
+      gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0);
+    }
+  `;
+
+  const shader_program = initShaderProgram(webgl, vs_source, fs_source);
+
+  const program_info = {
+    program: shader_program,
+    attribLocations: {
+      vertexPosition: webgl.getAttribLocation(shader_program, "aVertexPosition"),
+    },
+    // uniformLocations: {
+    //   projectionMatrix: webgl.getUniformLocation(shaderProgram, "uProjectionMatrix"),
+    //   modelViewMatrix: webgl.getUniformLocation(shaderProgram, "uModelViewMatrix"),
+    // },
+  };
+
+  const buffers = initBuffers(webgl);
+  drawScene(webgl, program_info, buffers);
+}
+
+window.onload = runWebGL; //runCanvasAPI;
